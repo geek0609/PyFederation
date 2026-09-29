@@ -57,3 +57,5 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = ["integration: requires a running Federation server, see docker-compose.yml"]

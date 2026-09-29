@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: generate check test
+.PHONY: generate check test integration
 
 generate:
 	$(PYTHON) scripts/unasync.py
@@ -13,3 +13,6 @@ check:
 
 test:
 	$(PYTHON) -m pytest
+
+integration:
+	$(PYTHON) -m pytest -m integration
