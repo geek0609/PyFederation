@@ -6,6 +6,8 @@ ENTITY_UUID = "0198f41f-3b3a-7c52-8f3e-3c1bd1b0b6a1"
 EVIDENCE_UUID = "0198f41f-5d0e-7a8b-9c1d-2e3f4a5b6c7d"
 OPERATOR_UUID = "0198f41f-0000-7000-8000-000000000000"
 AUDIT_LOG_UUID = "0198f41f-9999-7000-8000-000000000000"
+BLACKLIST_UUID = "0198f41f-7777-7000-8000-000000000000"
+REPORT_UUID = "0198f41f-8888-7000-8000-000000000000"
 TIMESTAMP = 1735689600
 
 
@@ -69,6 +71,37 @@ def operator(**overrides: Any) -> dict[str, Any]:
         "management_permissions": True,
         "operator_permissions": True,
         "auto_assign": False,
+        "created": TIMESTAMP,
+        "updated": TIMESTAMP,
+        **overrides,
+    }
+
+
+def blacklist(**overrides: Any) -> dict[str, Any]:
+    return {
+        "uuid": BLACKLIST_UUID,
+        "operator": OPERATOR_UUID,
+        "entity": ENTITY_UUID,
+        "report": REPORT_UUID,
+        "type": "SPAM",
+        "lifted": False,
+        "lifted_by": None,
+        "expires": TIMESTAMP + 86400,
+        "created": TIMESTAMP,
+        **overrides,
+    }
+
+
+def report(**overrides: Any) -> dict[str, Any]:
+    return {
+        "uuid": REPORT_UUID,
+        "submitting_operator": OPERATOR_UUID,
+        "reporting_entity": ENTITY_UUID,
+        "assigned_operator": None,
+        "automated": False,
+        "incident_type": "SPAM",
+        "opened": True,
+        "message": "Sends unsolicited advertisements",
         "created": TIMESTAMP,
         "updated": TIMESTAMP,
         **overrides,

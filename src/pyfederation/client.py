@@ -21,7 +21,12 @@ from .enums import RecordType
 from .exceptions import FederationClientException
 from .records import (
     AuditLog,
+    BlacklistRecord,
     ContentInput,
+    EvidenceRecord,
+    OperatorCreated,
+    OperatorRecord,
+    ReportRecord,
     ScannedContent,
     SearchResult,
     ServerInformation,
@@ -265,3 +270,271 @@ class FederationClient:
             "GET", "audit/search", f"Failed to search audit logs, query: {query}", params=params
         )
         return parse_list(AuditLog, data)
+
+    def create_operator(self, operator_name: str) -> OperatorCreated:
+        """Creates an operator, returning its UUID and access token."""
+        require(operator_name, "Operator name")
+        data = self._request(
+            "POST",
+            "operators",
+            f"Failed to create operator with name {operator_name}",
+            json={"name": operator_name},
+        )
+        return OperatorCreated.model_validate(data)
+
+    def delete_operator(self, operator_uuid: str) -> None:
+        """Deletes an operator."""
+        require(operator_uuid, "Operator UUID")
+        self._request(
+            "DELETE",
+            f"operators/{path_segment(operator_uuid)}",
+            f"Failed to delete operator with UUID {operator_uuid}",
+        )
+
+    def disable_operator(self, operator_uuid: str) -> None:
+        """Disables an operator, preventing it from authenticating."""
+        require(operator_uuid, "Operator UUID")
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/disable",
+            f"Failed to disable operator with UUID {operator_uuid}",
+        )
+
+    def enable_operator(self, operator_uuid: str) -> None:
+        """Enables a disabled operator."""
+        require(operator_uuid, "Operator UUID")
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/enable",
+            f"Failed to enable operator with UUID {operator_uuid}",
+        )
+
+    def get_operator(self, operator_uuid: str) -> OperatorRecord:
+        """Returns an operator by its UUID."""
+        require(operator_uuid, "Operator UUID")
+        data = self._request(
+            "GET", f"operators/{path_segment(operator_uuid)}", "Failed to get operator"
+        )
+        return OperatorRecord.model_validate(data)
+
+    def get_self(self) -> OperatorRecord:
+        """Returns the operator the client is authenticated as."""
+        data = self._request("GET", "operators/self", "Failed to get self operator")
+        return OperatorRecord.model_validate(data)
+
+    def list_operators(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[OperatorRecord]:
+        """Lists operators."""
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET",
+            "operators",
+            f"Failed to list operators, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(OperatorRecord, data)
+
+    def list_operator_audit_logs(
+        self,
+        operator_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[AuditLog]:
+        """Lists the audit log entries of an operator."""
+        require(operator_uuid, "Operator UUID")
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET",
+            f"operators/{path_segment(operator_uuid)}/audit",
+            f"Failed to list audit logs for operator with UUID {operator_uuid}",
+            params=params,
+        )
+        return parse_list(AuditLog, data)
+
+    def list_operator_evidence(
+        self,
+        operator_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        include_confidential: bool = False,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EvidenceRecord]:
+        """Lists the evidence records submitted by an operator."""
+        require(operator_uuid, "Operator UUID")
+        params = page_params(
+            page, limit, include_confidential=include_confidential, by=by, order=order
+        )
+        data = self._request(
+            "GET",
+            f"operators/{path_segment(operator_uuid)}/evidence",
+            f"Failed to list evidence records for operator with UUID {operator_uuid}",
+            params=params,
+        )
+        return parse_list(EvidenceRecord, data)
+
+    def list_operator_blacklist(
+        self,
+        operator_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        include_lifted: bool = False,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[BlacklistRecord]:
+        """Lists the blacklist records created by an operator."""
+        require(operator_uuid, "Operator UUID")
+        params = page_params(page, limit, include_lifted=include_lifted, by=by, order=order)
+        data = self._request(
+            "GET",
+            f"operators/{path_segment(operator_uuid)}/blacklist",
+            f"Failed to list operator blacklist records with UUID {operator_uuid}",
+            params=params,
+        )
+        return parse_list(BlacklistRecord, data)
+
+    def set_operator_permissions(self, operator_uuid: str, has_operator_permissions: bool) -> None:
+        """Grants or revokes the permission to manage other operators."""
+        require(operator_uuid, "Operator UUID")
+        action = "enable" if has_operator_permissions else "disable"
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/operator-permissions",
+            f"Failed to {action} the operator's operator permissions",
+            json={"enabled": has_operator_permissions},
+        )
+
+    def set_client_permissions(self, operator_uuid: str, has_client_permissions: bool) -> None:
+        """Grants or revokes the permission to submit data as a client."""
+        require(operator_uuid, "Operator UUID")
+        action = "enable" if has_client_permissions else "disable"
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/client-permissions",
+            f"Failed to {action} the operator's client permissions",
+            json={"enabled": has_client_permissions},
+        )
+
+    def set_management_permissions(
+        self, operator_uuid: str, has_management_permissions: bool
+    ) -> None:
+        """Grants or revokes the permission to manage the database."""
+        require(operator_uuid, "Operator UUID")
+        action = "enable" if has_management_permissions else "disable"
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/management-permissions",
+            f"Failed to {action} the operator's management permissions",
+            json={"enabled": has_management_permissions},
+        )
+
+    def set_auto_assign(self, operator_uuid: str, auto_assign: bool) -> None:
+        """Sets whether new reports are automatically assigned to an operator."""
+        require(operator_uuid, "Operator UUID")
+        action = "enable" if auto_assign else "disable"
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/auto-assign",
+            f"Failed to {action} the operator's auto assign",
+            json={"enabled": auto_assign},
+        )
+
+    def generate_access_token(self, update: bool = True) -> str:
+        """Generates a new access token for the authenticated operator, revoking the current one.
+
+        Args:
+            update: Whether the client should use the new access token from now on.
+        """
+        access_token: str = self._request(
+            "POST", "operators/refresh", "Failed to generate access token"
+        )
+        if update:
+            self.access_token = access_token
+
+        return access_token
+
+    def generate_operator_access_token(self, operator_uuid: str) -> str:
+        """Generates a new access token for an operator, revoking its current one."""
+        require(operator_uuid, "Operator UUID")
+        access_token: str = self._request(
+            "POST",
+            f"operators/{path_segment(operator_uuid)}/refresh",
+            f"Failed to generate access token for operator with UUID {operator_uuid}",
+        )
+        return access_token
+
+    def search_operators(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[OperatorRecord]:
+        """Searches operators."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET", "operators/search", f"Failed to search operators, query: {query}", params=params
+        )
+        return parse_list(OperatorRecord, data)
+
+    def update_operator_name(self, operator_uuid: str, new_name: str) -> None:
+        """Renames an operator."""
+        require(operator_uuid, "Operator UUID")
+        require(new_name, "Operator name")
+        self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/update-name",
+            f"Failed to update name for operator with UUID {operator_uuid}",
+            json={"name": new_name},
+        )
+
+    def list_operator_reports(
+        self,
+        operator_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Lists the reports submitted by an operator."""
+        require(operator_uuid, "Operator UUID")
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET",
+            f"operators/{path_segment(operator_uuid)}/reports",
+            f"Failed to list reports for operator {operator_uuid}",
+            params=params,
+        )
+        return parse_list(ReportRecord, data)
+
+    def list_assigned_operator_reports(
+        self,
+        operator_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Lists the reports assigned to an operator."""
+        require(operator_uuid, "Operator UUID")
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET",
+            f"operators/{path_segment(operator_uuid)}/reports/assigned",
+            f"Failed to list assigned reports for operator {operator_uuid}",
+            params=params,
+        )
+        return parse_list(ReportRecord, data)
