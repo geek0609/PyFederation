@@ -1100,3 +1100,119 @@ class FederationClient:
             "GET", "reports/search", f"Failed to search reports, query: {query}", params=params
         )
         return parse_list(ReportRecord, data)
+
+    def blacklist_entity(
+        self,
+        entity_identifier: str,
+        incident_type: IncidentType,
+        report_uuid: str | None = None,
+        expires: int | None = None,
+    ) -> str:
+        """Blacklists an entity, returning the UUID of the blacklist record.
+
+        Args:
+            entity_identifier: The entity to blacklist.
+            incident_type: The type of the incident the entity is blacklisted for.
+            report_uuid: The report supporting the decision.
+            expires: When the blacklist expires, or None for a permanent blacklist.
+        """
+        require(entity_identifier, "Entity identifier")
+        if expires is not None and expires < 0:
+            raise ValueError("The expires parameter must be a positive integer or None")
+
+        payload = compact(
+            entity_identifier=entity_identifier,
+            type=incident_type,
+            report_uuid=report_uuid,
+            expires=expires,
+        )
+        blacklist_uuid: str = self._request(
+            "POST", "blacklist", f"Failed to blacklist entity {entity_identifier}", json=payload
+        )
+        return blacklist_uuid
+
+    def delete_blacklist_record(self, blacklist_record_uuid: str) -> None:
+        """Deletes a blacklist record."""
+        require(blacklist_record_uuid, "Blacklist record UUID")
+        self._request(
+            "DELETE",
+            f"blacklist/{path_segment(blacklist_record_uuid)}",
+            f"Failed to delete blacklist record with UUID {blacklist_record_uuid}",
+        )
+
+    def get_blacklist_record(self, blacklist_record_uuid: str) -> BlacklistRecord:
+        """Returns a blacklist record by its UUID."""
+        require(blacklist_record_uuid, "Blacklist record UUID")
+        data = self._request(
+            "GET",
+            f"blacklist/{path_segment(blacklist_record_uuid)}",
+            f"Failed to get blacklist record with UUID {blacklist_record_uuid}",
+        )
+        return BlacklistRecord.model_validate(data)
+
+    def lift_blacklist_record(self, blacklist_record_uuid: str) -> None:
+        """Lifts a blacklist record, ending it before it expires."""
+        require(blacklist_record_uuid, "Blacklist record UUID")
+        self._request(
+            "PATCH",
+            f"blacklist/{path_segment(blacklist_record_uuid)}/lift",
+            f"Failed to lift blacklist record with UUID {blacklist_record_uuid}",
+        )
+
+    def extend_blacklist_record(self, blacklist_record_uuid: str, seconds: int) -> None:
+        """Extends the expiry of a temporary blacklist record by a number of seconds."""
+        require(blacklist_record_uuid, "Blacklist record UUID")
+        if seconds <= 0:
+            raise ValueError("Extension seconds must be positive")
+
+        self._request(
+            "PATCH",
+            f"blacklist/{path_segment(blacklist_record_uuid)}/extend",
+            f"Failed to extend blacklist record with UUID {blacklist_record_uuid}",
+            json={"seconds": seconds},
+        )
+
+    def list_blacklist_records(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        include_lifted: bool = False,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[BlacklistRecord]:
+        """Lists blacklist records."""
+        params = page_params(
+            page,
+            limit,
+            include_lifted=include_lifted,
+            category=category,
+            by=by,
+            order=order,
+        )
+        data = self._request(
+            "GET",
+            "blacklist",
+            f"Failed to list blacklist records, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(BlacklistRecord, data)
+
+    def search_blacklist(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[BlacklistRecord]:
+        """Searches blacklist records."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET",
+            "blacklist/search",
+            f"Failed to search blacklist records, query: {query}",
+            params=params,
+        )
+        return parse_list(BlacklistRecord, data)
