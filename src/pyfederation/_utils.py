@@ -59,6 +59,18 @@ def path_segment(value: str) -> str:
     return quote(value, safe="")
 
 
+def entity_path(entity_identifier: str) -> str:
+    """Returns the path of an entity.
+
+    Servers implementing OFD 1.x take the identifier unencoded, so an identifier that would not
+    stay one path segment is rejected.
+    """
+    if entity_identifier in (".", "..") or any(c in entity_identifier for c in "/\\?#%"):
+        raise ValueError(f"Entity identifier cannot be used in a path: {entity_identifier}")
+
+    return f"entities/{entity_identifier}"
+
+
 def parse_list(model: type[M], data: list[Any]) -> list[M]:
     return [model.model_validate(item) for item in data]
 
