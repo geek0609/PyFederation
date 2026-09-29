@@ -1,0 +1,74 @@
+services:
+  federation:
+    image: ghcr.io/nosial/federationlib:1.0.16
+    container_name: pyfederation_test
+    ports:
+      - "7000:7000"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - FEDERATION_DATABASE_HOST=mariadb
+      - FEDERATION_DATABASE_PORT=3306
+      - FEDERATION_DATABASE_USERNAME=${MYSQL_USER:-federation}
+      - FEDERATION_DATABASE_PASSWORD=${MYSQL_PASSWORD:-federation}
+      - FEDERATION_DATABASE_NAME=${MYSQL_DATABASE:-federation}
+      - FEDERATION_REDIS_ENABLED=true
+      - FEDERATION_REDIS_HOST=redis
+      - FEDERATION_REDIS_PORT=6379
+      - FEDERATION_ACCESS_TOKEN=${FEDERATION_ACCESS_TOKEN:-abcdefghijklmnopqrstuvwxyz123456}
+    networks:
+      - federation_network
+
+  mariadb:
+    container_name: pyfederation_mariadb
+    image: mariadb:10.5
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-federation_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-federation}
+      MYSQL_USER: ${MYSQL_USER:-federation}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-federation}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - federation_network
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "mariadb", "-u", "${MYSQL_USER:-federation}", "-p${MYSQL_PASSWORD:-federation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    container_name: pyfederation_redis
+    image: redis:alpine
+    restart: unless-stopped
+    command: redis-server
+    volumes:
+      - redis_data:/data
+    networks:
+      - federation_network
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  mariadb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  federation_network:
+    driver: bridge
