@@ -1,0 +1,276 @@
+"""Records exchanged with a Federation server. All timestamps are Unix epoch seconds."""
+
+import json
+from dataclasses import dataclass
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+
+from .enums import (
+    AuditLogType,
+    ClassificationFlag,
+    EntityRelationshipType,
+    IncidentType,
+    NamedEntityType,
+    RecordType,
+    SuggestedAction,
+)
+
+
+class _Record(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+
+@dataclass(frozen=True)
+class ContentInput:
+    """A piece of content submitted for scanning or attached to a report submission."""
+
+    text_content: str | None = None
+    note: str | None = None
+    tag: str | None = None
+    confidential: bool = False
+    metadata: dict[str, Any] | None = None
+
+
+class AuditLog(_Record):
+    """An entry of the audit log, referencing the records affected by the operation."""
+
+    uuid: str
+    operator: str | None = None
+    entity: str | None = None
+    blacklist: str | None = None
+    evidence: str | None = None
+    file_attachment: str | None = None
+    type: AuditLogType
+    message: str
+    timestamp: int
+
+
+class BlacklistRecord(_Record):
+    """A decision to block an entity, either permanently or until it expires."""
+
+    uuid: str
+    operator: str
+    entity: str
+    report: str | None = None
+    type: IncidentType
+    lifted: bool
+    lifted_by: str | None = None
+    expires: int | None = None
+    created: int
+
+
+class ContentClassification(_Record):
+    """The classification of scanned content."""
+
+    classification_flag: ClassificationFlag
+    confidence: float
+    detected_language: str | None = None
+
+
+class EntityRecord(_Record):
+    """An entity known to the server, such as a domain, email address or IP address."""
+
+    uuid: str
+    hash: str
+    host: str
+    id: str | None = None
+    metadata: dict[str, Any] | None = None
+    whitelisted: bool
+    reputation: int
+    reputation_last_updated: int | None = None
+    relationship_entity: str | None = None
+    relationship_type: EntityRelationshipType | None = None
+    created: int
+    updated: int
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _decode_metadata(cls, value: Any) -> Any:
+        # FederationLib serializes entity metadata as a JSON encoded string
+        return json.loads(value) if isinstance(value, str) else value
+
+
+class EntityQueryResult(_Record):
+    """An entity together with its relationship group, active blacklists and suggested action."""
+
+    entity_record: EntityRecord
+    related_entities: list[EntityRecord]
+    active_blacklists: list[BlacklistRecord]
+    suggested_action: SuggestedAction | None = None
+    suggested_lift_timestamp: int | None = None
+
+
+class EvidenceRecord(_Record):
+    """Information collected about an entity."""
+
+    uuid: str
+    entity: str
+    operator: str
+    confidential: bool
+    text_content: str | None = None
+    note: str | None = None
+    tag: str | None = None
+    report: str | None = None
+    metadata: dict[str, Any] | None = None
+    classification_flag: ClassificationFlag | None = None
+    created: int
+    updated: int
+
+
+class FileAttachmentRecord(_Record):
+    """A file uploaded as part of an evidence record."""
+
+    uuid: str
+    evidence: str | None = None
+    file_name: str
+    file_size: int
+    file_mime: str
+    created: int
+
+
+class OperatorCreated(_Record):
+    """The UUID and access token of a newly created operator."""
+
+    uuid: str
+    access_token: str = Field(repr=False)
+
+
+class OperatorRecord(_Record):
+    """An account of the Federation server and its permissions."""
+
+    uuid: str
+    name: str
+    disabled: bool
+    client_permissions: bool
+    management_permissions: bool
+    operator_permissions: bool
+    auto_assign: bool
+    created: int
+    updated: int
+
+
+class ReportRecord(_Record):
+    """An incident reported against an entity."""
+
+    uuid: str
+    submitting_operator: str
+    reporting_entity: str | None = None
+    assigned_operator: str | None = None
+    automated: bool
+    incident_type: IncidentType
+    opened: bool
+    message: str | None = None
+    created: int
+    updated: int | None = None
+
+
+class ReportSubmission(_Record):
+    """A submitted report together with the evidence records created for it."""
+
+    report: ReportRecord
+    evidence: list[EvidenceRecord]
+
+
+class ResolvedEntityPosition(_Record):
+    """The location of a named entity within scanned content."""
+
+    offset: int
+    length: int
+    type: NamedEntityType
+
+
+class ResolvedEntity(_Record):
+    """An entity resolved from scanned content."""
+
+    entity: EntityRecord
+    entity_position: ResolvedEntityPosition | None = None
+    active_blacklists: list[BlacklistRecord]
+    parent_entity: "ResolvedEntity | None" = None
+
+
+class ScannedContent(_Record):
+    """The result of a content scan, with the risk score and suggested action derived from it."""
+
+    resolved_entities: list[ResolvedEntity]
+    author_entity: ResolvedEntity | None = None
+    classification: ContentClassification | None = None
+    suggested_action: SuggestedAction | None = None
+    suggested_lift_timestamp: int | None = None
+    scan_results: dict[str, float]
+    risk_score: float
+
+
+class ServerInformation(_Record):
+    """The identity, public accessibility and record counts of a server."""
+
+    name: str
+    api_version: str
+    public_audit_logs: bool
+    public_evidence: bool
+    public_blacklist: bool
+    public_entities: bool
+    public_reports: bool
+    public_entity_metadata: bool
+    public_scan_content: bool
+    public_query_entity: bool
+    search_enabled: bool
+    public_search: bool
+    search_types: list[RecordType]
+    public_search_types: list[RecordType]
+    allow_illegal_content: bool | None = None
+    public_audit_logs_visibility: list[AuditLogType] | None = None
+    audit_log_records: int | None = None
+    blacklist_records: int | None = None
+    known_entities: int | None = None
+    evidence_records: int | None = None
+    file_attachment_records: int | None = None
+    operators: int | None = None
+    reports: int | None = None
+
+    @property
+    def illegal_content_allowed(self) -> bool:
+        """Whether the server accepts reports with the ILLEGAL_CONTENT incident type.
+
+        A server that declines them rejects such reports with HTTP 403. Servers that predate
+        allow_illegal_content do not publish it and accept every incident type.
+        """
+        return self.allow_illegal_content is not False
+
+
+class UploadResult(_Record):
+    """The UUID and download URL of an uploaded file attachment."""
+
+    uuid: str
+    url: str
+
+
+_SEARCH_RECORD_TYPES: dict[RecordType, type[_Record]] = {
+    RecordType.ENTITY: EntityRecord,
+    RecordType.EVIDENCE: EvidenceRecord,
+    RecordType.BLACKLIST: BlacklistRecord,
+    RecordType.REPORT: ReportRecord,
+    RecordType.ATTACHMENT: FileAttachmentRecord,
+    RecordType.AUDIT_LOG: AuditLog,
+    RecordType.OPERATOR: OperatorRecord,
+}
+
+
+class SearchResult(_Record):
+    """A record matched by a search, typed according to its record type."""
+
+    type: RecordType
+    record: (
+        EntityRecord
+        | EvidenceRecord
+        | BlacklistRecord
+        | ReportRecord
+        | FileAttachmentRecord
+        | AuditLog
+        | OperatorRecord
+    )
+
+    @field_validator("record", mode="before")
+    @classmethod
+    def _parse_record(cls, value: Any, info: ValidationInfo) -> Any:
+        return _SEARCH_RECORD_TYPES[info.data["type"]].model_validate(value)
