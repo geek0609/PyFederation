@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import asdict
 from typing import Any, TypeVar
+from urllib.parse import quote
 
 from pydantic import BaseModel
 
@@ -12,6 +13,12 @@ M = TypeVar("M", bound=BaseModel)
 def compact(**values: Any) -> dict[str, Any]:
     """Returns the given values without the ones that are unset."""
     return {key: value for key, value in values.items() if value is not None}
+
+
+def require(value: str | None, name: str) -> None:
+    """Raises a ValueError if the value is empty."""
+    if not value:
+        raise ValueError(f"{name} cannot be empty")
 
 
 def page_params(
@@ -41,6 +48,15 @@ def search_params(query: str, page: int, limit: int, **params: Any) -> dict[str,
         raise ValueError("Search query must be at least 2 characters")
 
     return {"q": query, **page_params(page, limit, **params)}
+
+
+def path_segment(value: str) -> str:
+    """Returns an identifier percent-encoded as one path segment, so it cannot address another
+    endpoint."""
+    if value in (".", ".."):
+        raise ValueError("Identifier cannot be '.' or '..'")
+
+    return quote(value, safe="")
 
 
 def parse_list(model: type[M], data: list[Any]) -> list[M]:

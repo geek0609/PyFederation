@@ -11,12 +11,16 @@ import httpx
 from ._utils import (
     compact,
     evidence_payload,
+    page_params,
     parse_list,
+    path_segment,
+    require,
     search_params,
 )
 from .enums import RecordType
 from .exceptions import FederationClientException
 from .records import (
+    AuditLog,
     ContentInput,
     ScannedContent,
     SearchResult,
@@ -220,3 +224,44 @@ class FederationClient:
             json=compact(evidence=payload, author=author, top_k=top_k, threshold=threshold),
         )
         return ScannedContent.model_validate(data)
+
+    def list_audit_logs(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[AuditLog]:
+        """Lists audit log entries."""
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET", "", f"Failed to list audit logs, page: {page}, limit: {limit}", params=params
+        )
+        return parse_list(AuditLog, data)
+
+    def get_audit_log_record(self, audit_log_uuid: str) -> AuditLog:
+        """Returns an audit log entry by its UUID."""
+        require(audit_log_uuid, "Audit log UUID")
+        data = self._request(
+            "GET",
+            f"audit/{path_segment(audit_log_uuid)}",
+            f"Failed to get audit log record for UUID {audit_log_uuid}",
+        )
+        return AuditLog.model_validate(data)
+
+    def search_audit_logs(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[AuditLog]:
+        """Searches audit log entries."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET", "audit/search", f"Failed to search audit logs, query: {query}", params=params
+        )
+        return parse_list(AuditLog, data)
