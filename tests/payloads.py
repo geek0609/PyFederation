@@ -8,6 +8,7 @@ OPERATOR_UUID = "0198f41f-0000-7000-8000-000000000000"
 AUDIT_LOG_UUID = "0198f41f-9999-7000-8000-000000000000"
 BLACKLIST_UUID = "0198f41f-7777-7000-8000-000000000000"
 REPORT_UUID = "0198f41f-8888-7000-8000-000000000000"
+ATTACHMENT_UUID = "0198f41f-6666-7000-8000-000000000000"
 TIMESTAMP = 1735689600
 
 
@@ -104,6 +105,18 @@ def report(**overrides: Any) -> dict[str, Any]:
         "message": "Sends unsolicited advertisements",
         "created": TIMESTAMP,
         "updated": TIMESTAMP,
+        **overrides,
+    }
+
+
+def attachment(**overrides: Any) -> dict[str, Any]:
+    return {
+        "uuid": ATTACHMENT_UUID,
+        "evidence": EVIDENCE_UUID,
+        "file_name": "screenshot.png",
+        "file_size": 2048,
+        "file_mime": "image/png",
+        "created": TIMESTAMP,
         **overrides,
     }
 

@@ -18,7 +18,7 @@ from ._utils import (
     require,
     search_params,
 )
-from .enums import EntityRelationshipType, RecordType
+from .enums import ClassificationFlag, EntityRelationshipType, RecordType
 from .exceptions import FederationClientException
 from .records import (
     AuditLog,
@@ -27,6 +27,7 @@ from .records import (
     EntityQueryResult,
     EntityRecord,
     EvidenceRecord,
+    FileAttachmentRecord,
     OperatorCreated,
     OperatorRecord,
     ReportRecord,
@@ -778,3 +779,157 @@ class FederationClient:
             "GET", "entities/search", f"Failed to search entities, query: {query}", params=params
         )
         return parse_list(EntityRecord, data)
+
+    def delete_evidence(self, evidence_uuid: str) -> None:
+        """Deletes an evidence record."""
+        require(evidence_uuid, "Evidence UUID")
+        self._request(
+            "DELETE",
+            f"evidence/{path_segment(evidence_uuid)}",
+            f"Failed to delete evidence with UUID {evidence_uuid}",
+        )
+
+    def get_evidence_record(self, evidence_uuid: str) -> EvidenceRecord:
+        """Returns an evidence record by its UUID."""
+        require(evidence_uuid, "Evidence UUID")
+        data = self._request(
+            "GET",
+            f"evidence/{path_segment(evidence_uuid)}",
+            f"Failed to get evidence record with UUID {evidence_uuid}",
+        )
+        return EvidenceRecord.model_validate(data)
+
+    def get_evidence_attachments(self, evidence_uuid: str) -> list[FileAttachmentRecord]:
+        """Returns the file attachments of an evidence record."""
+        require(evidence_uuid, "Evidence UUID")
+        data = self._request(
+            "GET",
+            f"evidence/{path_segment(evidence_uuid)}/attachments",
+            f"Failed to get evidence attachments for evidence with UUID {evidence_uuid}",
+        )
+        return parse_list(FileAttachmentRecord, data)
+
+    def list_evidence(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        include_confidential: bool = False,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EvidenceRecord]:
+        """Lists evidence records."""
+        params = page_params(
+            page,
+            limit,
+            include_confidential=include_confidential,
+            category=category,
+            by=by,
+            order=order,
+        )
+        data = self._request(
+            "GET",
+            "evidence",
+            f"Failed to list evidence records, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(EvidenceRecord, data)
+
+    def submit_evidence(
+        self,
+        entity_identifier: str,
+        text_content: str | None = None,
+        note: str | None = None,
+        tag: str | None = None,
+        confidential: bool = False,
+        metadata: dict[str, Any] | None = None,
+        classification: ClassificationFlag | None = None,
+    ) -> str:
+        """Submits evidence about an entity, returning the UUID of the evidence record.
+
+        Args:
+            entity_identifier: The entity the evidence is about.
+            text_content: The observed text content.
+            note: A note by the operator.
+            tag: A tag to categorize the evidence with.
+            confidential: Whether the evidence is hidden from the public.
+            metadata: Arbitrary metadata to associate with the evidence.
+            classification: An immutable classification of the evidence, which requires management
+                permissions and trains the server's classifier with the text content.
+        """
+        require(entity_identifier, "Entity identifier")
+        payload = compact(
+            entity_identifier=entity_identifier,
+            text_content=text_content,
+            note=note,
+            tag=tag,
+            confidential=confidential,
+            metadata=metadata,
+            classification=classification,
+        )
+        evidence_uuid: str = self._request(
+            "POST",
+            "evidence",
+            f"Failed to submit evidence for entity {entity_identifier}",
+            json=payload,
+        )
+        return evidence_uuid
+
+    def update_evidence_confidentiality(self, evidence_uuid: str, confidential: bool) -> None:
+        """Sets whether an evidence record is hidden from the public."""
+        require(evidence_uuid, "Evidence UUID")
+        action = "set" if confidential else "unset"
+        self._request(
+            "PATCH",
+            f"evidence/{path_segment(evidence_uuid)}/update-confidentiality",
+            f"Failed to {action} confidentiality for evidence with UUID {evidence_uuid}",
+            json={"confidential": confidential},
+        )
+
+    def update_evidence_tag(self, evidence_uuid: str, tag: str) -> None:
+        """Sets the tag of an evidence record."""
+        require(evidence_uuid, "Evidence UUID")
+        require(tag, "Tag")
+        self._request(
+            "PATCH",
+            f"evidence/{path_segment(evidence_uuid)}/update-tag",
+            f"Failed to update tag for evidence with UUID {evidence_uuid}",
+            json={"tag": tag},
+        )
+
+    def classify_evidence(self, evidence_uuid: str, classification: ClassificationFlag) -> None:
+        """Classifies an evidence record, training the server's classifier with its content."""
+        require(evidence_uuid, "Evidence UUID")
+        self._request(
+            "PATCH",
+            f"evidence/{path_segment(evidence_uuid)}/classify",
+            f"Failed to classify evidence with UUID {evidence_uuid}",
+            json={"classification_flag": classification},
+        )
+
+    def search_evidence(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EvidenceRecord]:
+        """Searches evidence records."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = self._request(
+            "GET", "evidence/search", f"Failed to search evidence, query: {query}", params=params
+        )
+        return parse_list(EvidenceRecord, data)
+
+    def add_evidence_to_report(self, evidence_uuid: str, report_uuid: str) -> None:
+        """Links an evidence record to a report."""
+        require(evidence_uuid, "Evidence UUID")
+        require(report_uuid, "Report UUID")
+        self._request(
+            "PATCH",
+            f"evidence/{path_segment(evidence_uuid)}/link-report",
+            f"Failed to link evidence {evidence_uuid} to report {report_uuid}",
+            json={"report_uuid": report_uuid},
+        )
