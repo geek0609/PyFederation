@@ -17,7 +17,7 @@ from ._utils import (
     require,
     search_params,
 )
-from .enums import ClassificationFlag, EntityRelationshipType, RecordType
+from .enums import ClassificationFlag, EntityRelationshipType, IncidentType, RecordType
 from .exceptions import FederationClientException
 from .records import (
     AuditLog,
@@ -30,6 +30,7 @@ from .records import (
     OperatorCreated,
     OperatorRecord,
     ReportRecord,
+    ReportSubmission,
     ScannedContent,
     SearchResult,
     ServerInformation,
@@ -942,3 +943,171 @@ class AsyncFederationClient:
             f"Failed to link evidence {evidence_uuid} to report {report_uuid}",
             json={"report_uuid": report_uuid},
         )
+
+    async def delete_report(self, report_uuid: str) -> None:
+        """Deletes a report."""
+        require(report_uuid, "Report UUID")
+        await self._request(
+            "DELETE",
+            f"reports/{path_segment(report_uuid)}",
+            f"Failed to delete report {report_uuid}",
+        )
+
+    async def submit_report(
+        self,
+        reporting_entity: str,
+        evidence: str | ContentInput | Sequence[ContentInput],
+        incident_type: IncidentType,
+        report_message: str | None = None,
+    ) -> ReportSubmission:
+        """Reports an entity, creating an evidence record for each piece of evidence.
+
+        Args:
+            reporting_entity: The entity being reported.
+            evidence: The text, content input or content inputs documenting the incident.
+            incident_type: The type of the incident.
+            report_message: A description of the incident.
+        """
+        require(reporting_entity, "Reporting entity identifier")
+        if isinstance(evidence, str):
+            require(evidence, "Content")
+
+        payload = compact(
+            reporting_entity=reporting_entity,
+            evidence=evidence_payload(evidence),
+            incident_type=incident_type,
+            report_message=report_message,
+        )
+        data = await self._request("POST", "reports", "Failed to submit report", json=payload)
+        return ReportSubmission.model_validate(data)
+
+    async def list_reports(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Lists reports."""
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            "reports",
+            f"Failed to list reports, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(ReportRecord, data)
+
+    async def list_opened_reports(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Lists the opened reports assigned to the authenticated operator."""
+        params = page_params(page, limit, by=by, order=order)
+        data = await self._request(
+            "GET",
+            "reports/opened",
+            f"Failed to list opened reports, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(ReportRecord, data)
+
+    async def get_report(self, report_uuid: str) -> ReportRecord:
+        """Returns a report by its UUID."""
+        require(report_uuid, "Report UUID")
+        data = await self._request(
+            "GET", f"reports/{path_segment(report_uuid)}", f"Failed to get report {report_uuid}"
+        )
+        return ReportRecord.model_validate(data)
+
+    async def list_report_evidence_records(
+        self,
+        report_uuid: str,
+        page: int = 1,
+        limit: int = 100,
+        include_confidential: bool = False,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EvidenceRecord]:
+        """Lists the evidence records of a report."""
+        require(report_uuid, "Report UUID")
+        params = page_params(
+            page,
+            limit,
+            include_confidential=include_confidential,
+            category=category,
+            by=by,
+            order=order,
+        )
+        data = await self._request(
+            "GET",
+            f"reports/{path_segment(report_uuid)}/evidence",
+            f"Failed to list evidence records for report {report_uuid}",
+            params=params,
+        )
+        return parse_list(EvidenceRecord, data)
+
+    async def close_report(
+        self,
+        report_uuid: str,
+        classification: ClassificationFlag | None = None,
+        blacklist_incident_type: IncidentType | None = None,
+        blacklist_expires: int | None = None,
+    ) -> None:
+        """Closes a report assigned to the authenticated operator.
+
+        Args:
+            report_uuid: The report to close.
+            classification: A classification to assign to the evidence records of the report.
+            blacklist_incident_type: The incident type to blacklist the reported entity with, or
+                None to close the report without blacklisting it.
+            blacklist_expires: When the blacklist expires, or None for a permanent blacklist.
+        """
+        require(report_uuid, "Report UUID")
+        payload = compact(
+            classification_flag=classification,
+            blacklist_incident_type=blacklist_incident_type,
+            blacklist_expires=blacklist_expires,
+        )
+        await self._request(
+            "PATCH",
+            f"reports/{path_segment(report_uuid)}/close",
+            f"Failed to close report {report_uuid}",
+            json=payload,
+        )
+
+    async def assign_operator_to_report(
+        self, report_uuid: str, operator_uuid: str | None = None
+    ) -> None:
+        """Assigns a report to an operator, or to the authenticated operator if none is given."""
+        require(report_uuid, "Report UUID")
+        if operator_uuid is not None:
+            require(operator_uuid, "Operator UUID")
+
+        await self._request(
+            "PATCH",
+            f"reports/{path_segment(report_uuid)}/assign",
+            f"Failed to assign an operator to report {report_uuid}",
+            json=compact(operator=operator_uuid),
+        )
+
+    async def search_reports(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Searches reports."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET", "reports/search", f"Failed to search reports, query: {query}", params=params
+        )
+        return parse_list(ReportRecord, data)
