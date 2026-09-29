@@ -9,6 +9,7 @@ import httpx
 
 from ._utils import (
     compact,
+    entity_path,
     evidence_payload,
     page_params,
     parse_list,
@@ -16,12 +17,14 @@ from ._utils import (
     require,
     search_params,
 )
-from .enums import RecordType
+from .enums import EntityRelationshipType, RecordType
 from .exceptions import FederationClientException
 from .records import (
     AuditLog,
     BlacklistRecord,
     ContentInput,
+    EntityQueryResult,
+    EntityRecord,
     EvidenceRecord,
     OperatorCreated,
     OperatorRecord,
@@ -545,3 +548,240 @@ class AsyncFederationClient:
             params=params,
         )
         return parse_list(ReportRecord, data)
+
+    async def delete_entity(self, entity_identifier: str) -> None:
+        """Deletes an entity."""
+        require(entity_identifier, "Entity identifier")
+        await self._request(
+            "DELETE",
+            entity_path(entity_identifier),
+            f"Failed to delete the entity {entity_identifier}",
+        )
+
+    async def get_entity_record(self, entity_identifier: str) -> EntityRecord:
+        """Returns an entity."""
+        require(entity_identifier, "Entity identifier")
+        data = await self._request(
+            "GET",
+            entity_path(entity_identifier),
+            f"Failed to get the entity record for {entity_identifier}",
+        )
+        return EntityRecord.model_validate(data)
+
+    async def query_entity(self, entity_identifier: str) -> EntityQueryResult:
+        """Returns an entity with its relationship group, active blacklists and suggested action."""
+        require(entity_identifier, "Entity identifier")
+        data = await self._request(
+            "GET",
+            f"{entity_path(entity_identifier)}/query",
+            f"Failed to query entity {entity_identifier}",
+        )
+        return EntityQueryResult.model_validate(data)
+
+    async def list_entities(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EntityRecord]:
+        """Lists entities."""
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            "entities",
+            f"Failed to list entities, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(EntityRecord, data)
+
+    async def get_top_threats(self, limit: int = 10) -> list[EntityRecord]:
+        """Returns the entities with the lowest reputation."""
+        if limit < 1:
+            raise ValueError("Limit must be greater than 0")
+
+        data = await self._request(
+            "GET",
+            "entities/top-threats",
+            f"Failed to retrieve top threats, limit: {limit}",
+            params={"limit": limit},
+        )
+        return parse_list(EntityRecord, data)
+
+    async def list_entity_audit_logs(
+        self,
+        entity_identifier: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[AuditLog]:
+        """Lists the audit log entries of an entity."""
+        require(entity_identifier, "Entity identifier")
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            f"{entity_path(entity_identifier)}/audit",
+            f"Failed to list audit logs for entity {entity_identifier}",
+            params=params,
+        )
+        return parse_list(AuditLog, data)
+
+    async def list_entity_blacklist_records(
+        self,
+        entity_identifier: str,
+        page: int = 1,
+        limit: int = 100,
+        include_lifted: bool = False,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[BlacklistRecord]:
+        """Lists the blacklist records of an entity."""
+        require(entity_identifier, "Entity identifier")
+        params = page_params(page, limit, include_lifted=include_lifted, by=by, order=order)
+        data = await self._request(
+            "GET",
+            f"{entity_path(entity_identifier)}/blacklist",
+            f"Failed to list blacklist records for entity {entity_identifier}",
+            params=params,
+        )
+        return parse_list(BlacklistRecord, data)
+
+    async def list_entity_evidence_records(
+        self,
+        entity_identifier: str,
+        page: int = 1,
+        limit: int = 100,
+        include_confidential: bool = False,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EvidenceRecord]:
+        """Lists the evidence records of an entity."""
+        require(entity_identifier, "Entity identifier")
+        params = page_params(
+            page, limit, include_confidential=include_confidential, by=by, order=order
+        )
+        data = await self._request(
+            "GET",
+            f"{entity_path(entity_identifier)}/evidence",
+            f"Failed to list evidence records for entity {entity_identifier}",
+            params=params,
+        )
+        return parse_list(EvidenceRecord, data)
+
+    async def list_entity_reports(
+        self,
+        entity_identifier: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[ReportRecord]:
+        """Lists the reports made against an entity."""
+        require(entity_identifier, "Entity identifier")
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            f"{entity_path(entity_identifier)}/reports",
+            f"Failed to list reports for entity {entity_identifier}",
+            params=params,
+        )
+        return parse_list(ReportRecord, data)
+
+    async def push_entity(
+        self, host: str, id: str | None = None, metadata: dict[str, Any] | None = None
+    ) -> str:
+        """Registers an entity, returning its UUID. Pushing a known entity returns its UUID.
+
+        Args:
+            host: The domain or IP address of the entity.
+            id: The local part of the entity address, such as the username of an email address.
+            metadata: Arbitrary metadata to associate with the entity.
+        """
+        require(host, "Host")
+        if id is not None:
+            require(id, "Entity ID")
+
+        entity_uuid: str = await self._request(
+            "POST",
+            "entities",
+            f"Failed to push entity with domain {host}",
+            json=compact(host=host, id=id, metadata=metadata),
+        )
+        return entity_uuid
+
+    async def update_entity(self, entity_identifier: str, metadata: dict[str, Any]) -> None:
+        """Replaces the metadata of an entity."""
+        require(entity_identifier, "Entity identifier")
+        await self._request(
+            "PATCH",
+            entity_path(entity_identifier),
+            f"Failed to update entity {entity_identifier}",
+            json={"metadata": metadata},
+        )
+
+    async def set_entity_whitelist(self, entity_identifier: str, whitelisted: bool) -> None:
+        """Sets whether an entity is whitelisted."""
+        require(entity_identifier, "Entity identifier")
+        await self._request(
+            "PATCH",
+            f"{entity_path(entity_identifier)}/whitelist",
+            f"Failed to set whitelist state for entity {entity_identifier}",
+            json={"whitelisted": whitelisted},
+        )
+
+    async def clear_entity_reputation(self, entity_identifier: str) -> None:
+        """Resets the reputation of an entity."""
+        require(entity_identifier, "Entity identifier")
+        await self._request(
+            "PATCH",
+            f"{entity_path(entity_identifier)}/clear-reputation",
+            f"Failed to clear reputation for entity {entity_identifier}",
+        )
+
+    async def set_entity_relationship(
+        self,
+        entity_identifier: str,
+        related_entity_identifier: str,
+        relationship_type: EntityRelationshipType,
+    ) -> None:
+        """Relates an entity to another entity, given by its UUID, SHA-256 hash or address."""
+        require(entity_identifier, "Entity identifier")
+        require(related_entity_identifier, "Related entity identifier")
+        await self._request(
+            "PATCH",
+            f"{entity_path(entity_identifier)}/relationship",
+            f"Failed to set relationship for entity {entity_identifier}",
+            json={
+                "target_identifier": related_entity_identifier,
+                "relationship_type": relationship_type,
+            },
+        )
+
+    async def clear_entity_relationship(self, entity_identifier: str) -> None:
+        """Removes the relationship of an entity."""
+        require(entity_identifier, "Entity identifier")
+        await self._request(
+            "DELETE",
+            f"{entity_path(entity_identifier)}/relationship",
+            f"Failed to clear relationship for entity {entity_identifier}",
+        )
+
+    async def search_entities(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[EntityRecord]:
+        """Searches entities."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET", "entities/search", f"Failed to search entities, query: {query}", params=params
+        )
+        return parse_list(EntityRecord, data)
