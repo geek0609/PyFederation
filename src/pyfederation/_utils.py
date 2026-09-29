@@ -1,8 +1,10 @@
 from collections.abc import Sequence
 from dataclasses import asdict
+from email.message import Message
 from typing import Any, TypeVar
 from urllib.parse import quote
 
+import httpx
 from pydantic import BaseModel
 
 from .records import ContentInput
@@ -88,3 +90,16 @@ def evidence_payload(
         raise ValueError("Evidence cannot be empty")
 
     return [compact(**asdict(item)) for item in evidence]
+
+
+def attachment_file_name(response: httpx.Response, default: str) -> str:
+    """Returns the file name given by the Content-Disposition header, without directories or a
+    drive letter.
+
+    Falls back to the default when the header names no usable file.
+    """
+    message = Message()
+    message["Content-Disposition"] = response.headers.get("Content-Disposition", "")
+    file_name = message.get_filename(default)
+    file_name = file_name[max(map(file_name.rfind, "/\\:")) + 1 :]
+    return file_name if file_name not in ("", ".", "..") else default

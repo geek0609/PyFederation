@@ -1,13 +1,17 @@
 """Asynchronous client for Federation servers."""
 
 import logging
+import os
 from collections.abc import Sequence
+from os import PathLike
+from pathlib import Path, PurePosixPath
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, BinaryIO, Self
 
 import httpx
 
 from ._utils import (
+    attachment_file_name,
     compact,
     entity_path,
     evidence_payload,
@@ -34,9 +38,12 @@ from .records import (
     ScannedContent,
     SearchResult,
     ServerInformation,
+    UploadResult,
 )
 
 log = logging.getLogger(__name__)
+
+DEFAULT_MAX_FILE_SIZE = 52_428_800
 
 
 class AsyncFederationClient:
@@ -1227,3 +1234,184 @@ class AsyncFederationClient:
             params=params,
         )
         return parse_list(BlacklistRecord, data)
+
+    async def get_attachment_info(self, attachment_uuid: str) -> FileAttachmentRecord:
+        """Returns the information of a file attachment."""
+        require(attachment_uuid, "Attachment UUID")
+        data = await self._request(
+            "GET",
+            f"attachments/{path_segment(attachment_uuid)}/info",
+            f"Failed to get attachment information with UUID {attachment_uuid}",
+        )
+        return FileAttachmentRecord.model_validate(data)
+
+    async def list_attachments(
+        self,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[FileAttachmentRecord]:
+        """Lists file attachments."""
+        params = page_params(page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            "attachments",
+            f"Failed to list attachments, page: {page}, limit: {limit}",
+            params=params,
+        )
+        return parse_list(FileAttachmentRecord, data)
+
+    async def delete_attachment(self, attachment_uuid: str) -> None:
+        """Deletes a file attachment."""
+        require(attachment_uuid, "Attachment UUID")
+        await self._request(
+            "DELETE",
+            f"attachments/{path_segment(attachment_uuid)}",
+            f"Failed to delete attachment with UUID {attachment_uuid}",
+        )
+
+    async def download_attachment(
+        self, attachment_uuid: str, directory_path: str | PathLike[str]
+    ) -> Path:
+        """Downloads a file attachment into a directory, returning the path of the file.
+
+        The file is named after the attachment, replacing any existing file of the same name.
+        """
+        require(attachment_uuid, "Attachment UUID")
+        require(os.fspath(directory_path), "Directory path")
+        directory = Path(directory_path)
+        if not directory.is_dir():
+            raise ValueError(f"Directory does not exist: {directory_path}")
+        if not os.access(directory, os.W_OK):
+            raise ValueError(f"Directory is not writable: {directory_path}")
+
+        error_message = f"Failed to download attachment with UUID {attachment_uuid}"
+        response = await self._send(
+            "GET", f"attachments/{path_segment(attachment_uuid)}", error_message, stream=True
+        )
+
+        try:
+            file_path = directory / attachment_file_name(response, attachment_uuid)
+            with file_path.open("wb") as file:
+                async for chunk in response.aiter_bytes():
+                    file.write(chunk)
+        except httpx.HTTPError as e:
+            raise FederationClientException(f"{error_message}: {e}") from e
+        finally:
+            await response.aclose()
+
+        return file_path
+
+    async def upload_file_attachment(
+        self,
+        evidence_uuid: str,
+        local_file_path: str | PathLike[str],
+        file_name: str | None = None,
+    ) -> UploadResult:
+        """Uploads a file as an attachment of an evidence record.
+
+        Args:
+            evidence_uuid: The evidence record to attach the file to.
+            local_file_path: The path of the file to upload.
+            file_name: The name to upload the file as, defaulting to its local name.
+        """
+        require(evidence_uuid, "Evidence UUID")
+        path = Path(local_file_path)
+        if not path.is_file():
+            raise ValueError(f"File does not exist: {local_file_path}")
+        if not os.access(path, os.R_OK):
+            raise ValueError(f"File is not readable: {local_file_path}")
+        if path.stat().st_size == 0:
+            raise ValueError(f"Invalid file or empty file: {local_file_path}")
+
+        with path.open("rb") as file:
+            return await self._upload_attachment(evidence_uuid, file_name or path.name, file)
+
+    async def upload_note_attachment(
+        self, evidence_uuid: str, file_name: str, content: str
+    ) -> UploadResult:
+        """Uploads text as a .txt attachment of an evidence record."""
+        require(evidence_uuid, "Evidence UUID")
+        require(file_name, "File name")
+        require(content, "Content")
+        if not file_name.endswith(".txt"):
+            file_name += ".txt"
+
+        return await self._upload_attachment(evidence_uuid, file_name, content.encode())
+
+    async def upload_file_attachment_from_url(
+        self,
+        evidence_uuid: str,
+        file_url: str,
+        max_file_size: int = DEFAULT_MAX_FILE_SIZE,
+    ) -> UploadResult:
+        """Downloads a file and uploads it as an attachment of an evidence record.
+
+        The file is requested from this machine, following redirects, so only pass a URL you
+        trust.
+
+        Args:
+            evidence_uuid: The evidence record to attach the file to.
+            file_url: The URL to download the file from, which is requested without credentials.
+            max_file_size: The maximum size of the file in bytes.
+        """
+        require(evidence_uuid, "Evidence UUID")
+        if not file_url:
+            raise ValueError(f"Invalid URL provided: {file_url}")
+        if max_file_size <= 0:
+            raise ValueError("Maximum file size must be greater than 0")
+
+        error_message = f"Failed to download file from URL: {file_url}"
+        content = bytearray()
+
+        try:
+            async with self._http_client.stream("GET", file_url, follow_redirects=True) as response:
+                if response.is_error:
+                    raise FederationClientException(
+                        f"{error_message}, {response.reason_phrase}", response.status_code
+                    )
+
+                async for chunk in response.aiter_bytes():
+                    content += chunk
+                    if len(content) > max_file_size:
+                        raise FederationClientException(
+                            f"File exceeds maximum file size limit of {max_file_size} bytes", 413
+                        )
+        except httpx.HTTPError as e:
+            raise FederationClientException(f"{error_message}: {e}") from e
+
+        file_name = PurePosixPath(httpx.URL(file_url).path).name or "downloaded_file"
+        return await self._upload_attachment(evidence_uuid, file_name, bytes(content))
+
+    async def _upload_attachment(
+        self, evidence_uuid: str, file_name: str, content: bytes | BinaryIO
+    ) -> UploadResult:
+        data = await self._request(
+            "POST",
+            "attachments",
+            f"Failed to upload file attachment for evidence with UUID {evidence_uuid}",
+            data={"evidence_uuid": evidence_uuid},
+            files={"file": (file_name, content)},
+        )
+        return UploadResult.model_validate(data)
+
+    async def search_attachments(
+        self,
+        query: str,
+        page: int = 1,
+        limit: int = 100,
+        category: str | None = None,
+        by: str | None = None,
+        order: str | None = None,
+    ) -> list[FileAttachmentRecord]:
+        """Searches file attachments."""
+        params = search_params(query, page, limit, category=category, by=by, order=order)
+        data = await self._request(
+            "GET",
+            "attachments/search",
+            f"Failed to search attachments, query: {query}",
+            params=params,
+        )
+        return parse_list(FileAttachmentRecord, data)
