@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyfederation"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python client for Open Federated Database (OFD) servers"
 readme = "README.md"
 license = "MIT"
@@ -14,10 +14,19 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.6",
 ]
+keywords = ["ofd", "federation", "spam", "moderation", "client"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
     "Topic :: Security",
     "Typing :: Typed",
 ]
