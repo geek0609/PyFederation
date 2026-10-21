@@ -30,6 +30,19 @@ def test_entity_metadata_accepts_an_object() -> None:
     assert record.metadata == {"platform": "telegram"}
 
 
+@pytest.mark.parametrize(
+    ("host", "id", "telephone"),
+    [
+        ("e164.arpa", "14155550123", True),
+        ("E164.ARPA", "14155550123", True),
+        ("e164.arpa", None, False),
+        ("example.com", "14155550123", False),
+    ],
+)
+def test_entity_is_telephone(host: str, id: str | None, telephone: bool) -> None:
+    assert EntityRecord.model_validate(payloads.entity(host=host, id=id)).is_telephone is telephone
+
+
 def test_unknown_fields_are_ignored() -> None:
     record = EntityRecord.model_validate(payloads.entity(introduced_later=True))
     assert not hasattr(record, "introduced_later")
