@@ -9,8 +9,10 @@ import respx
 from pyfederation import (
     AsyncFederationClient,
     ContentInput,
+    ContentType,
     FederationClient,
     FederationClientException,
+    IncidentType,
     RecordType,
     SuggestedAction,
 )
@@ -195,6 +197,38 @@ async def test_scan_content_inputs(client: Any, api: respx.MockRouter) -> None:
     }
 
 
+async def test_scan_typed_content_with_concerns(client: Any, api: respx.MockRouter) -> None:
+    route = api.post("/scan").respond(json=scan_response())
+
+    await run(
+        client.scan_content(
+            [
+                ContentInput("Your account is locked", content_type=ContentType.TEXT),
+                ContentInput(
+                    "Verify it now",
+                    content_type=ContentType.EMAIL,
+                    context={"subject": "Account locked", "sender": "security@example.com"},
+                ),
+            ],
+            concerns=[IncidentType.PHISHING, IncidentType.SPAM],
+        )
+    )
+
+    assert json.loads(route.calls.last.request.content) == {
+        # TEXT is the default content type, which is not sent
+        "evidence": [
+            {"text_content": "Your account is locked", "confidential": False},
+            {
+                "text_content": "Verify it now",
+                "confidential": False,
+                "content_type": "EMAIL",
+                "context": {"subject": "Account locked", "sender": "security@example.com"},
+            },
+        ],
+        "concerns": ["PHISHING", "SPAM"],
+    }
+
+
 async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> None:
     api.get("/info").respond(content=b"<html></html>", headers={"Content-Type": "text/html"})
 
@@ -210,6 +244,7 @@ async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> N
         (lambda client: client.search("a"), "Search query must be at least 2 characters"),
         (lambda client: client.search("spam", page=0), "Page must be greater than 0"),
         (lambda client: client.scan_content([]), "Evidence cannot be empty"),
+        (lambda client: client.scan_content("spam", concerns=[]), "Concerns cannot be empty"),
         (
             lambda client: client.scan_content(""),
             "At least one evidence record must contain text content",

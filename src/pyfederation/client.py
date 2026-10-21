@@ -224,6 +224,7 @@ class FederationClient:
         author: str | None = None,
         top_k: int | None = None,
         threshold: float | None = None,
+        concerns: Sequence[IncidentType] | None = None,
     ) -> ScannedContent:
         """Scans content for entities and blacklist records, and classifies it.
 
@@ -232,17 +233,28 @@ class FederationClient:
             author: The UUID, SHA-256 hash or address of the author entity.
             top_k: The number of top classifications to return.
             threshold: The confidence threshold for classification.
+            concerns: The incident types to assess, among the concerns the server publishes, or
+                None for its default concerns. Only these affect the classification, risk score,
+                suggested action and detections of the result.
         """
         payload = evidence_payload(evidence)
         items = payload if isinstance(payload, list) else [payload]
         if not any(item.get("text_content") for item in items):
             raise ValueError("At least one evidence record must contain text content")
+        if concerns is not None and not concerns:
+            raise ValueError("Concerns cannot be empty")
 
         data = self._request(
             "POST",
             "scan",
             "Failed to scan content",
-            json=compact(evidence=payload, author=author, top_k=top_k, threshold=threshold),
+            json=compact(
+                evidence=payload,
+                author=author,
+                top_k=top_k,
+                threshold=threshold,
+                concerns=concerns,
+            ),
         )
         return ScannedContent.model_validate(data)
 
@@ -628,13 +640,26 @@ class FederationClient:
         )
         return EntityRecord.model_validate(data)
 
-    def query_entity(self, entity_identifier: str) -> EntityQueryResult:
-        """Returns an entity with its relationship group, active blacklists and suggested action."""
+    def query_entity(
+        self, entity_identifier: str, concerns: Sequence[IncidentType] | None = None
+    ) -> EntityQueryResult:
+        """Returns an entity with its relationship group, active blacklists and suggested action.
+
+        Args:
+            entity_identifier: The entity to query.
+            concerns: The incident types to suggest an action for, among the concerns the server
+                publishes, or None for its default concerns. The active blacklists are returned
+                regardless of the concerns.
+        """
         require(entity_identifier, "Entity identifier")
+        if concerns is not None and not concerns:
+            raise ValueError("Concerns cannot be empty")
+
         data = self._request(
             "GET",
             f"{entity_path(entity_identifier)}/query",
             f"Failed to query entity {entity_identifier}",
+            params={"concerns": ",".join(concerns)} if concerns is not None else None,
         )
         return EntityQueryResult.model_validate(data)
 

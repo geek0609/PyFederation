@@ -5,8 +5,10 @@ import pytest
 from pyfederation import (
     AsyncFederationClient,
     ContentInput,
+    ContentType,
     FederationClient,
     FederationClientException,
+    IncidentType,
     NamedEntityType,
     RecordType,
 )
@@ -75,3 +77,16 @@ async def test_scan_content(client: Any, records: Records) -> None:
     assert mentioned.entity.uuid == mentioned_uuid
     assert mentioned.entity_position.type is NamedEntityType.URL
     assert text[mentioned.entity_position.offset :].startswith("https://")
+
+
+async def test_scan_typed_content(client: Any) -> None:
+    inputs = [
+        ContentInput("Meeting moved to 3pm"),
+        ContentInput("example.com", content_type=ContentType.HOSTNAME, context={"query_type": "A"}),
+        ContentInput("https://example.com/page", content_type=ContentType.URL),
+    ]
+
+    scanned = await run(client.scan_content(inputs, concerns=[IncidentType.SPAM]))
+
+    assert all(detection.concern is IncidentType.SPAM for detection in scanned.detections)
+    assert all(0 <= detection.content_index < len(inputs) for detection in scanned.detections)

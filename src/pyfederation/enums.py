@@ -45,6 +45,27 @@ class ClassificationFlag(StrEnum):
     NORMAL = "NORMAL"
 
 
+class ContentType(StrEnum):
+    """The type of content, which determines the form of its text and the keys of its context.
+
+    - TEXT: free-form text, such as a chat message. This is the default.
+    - EMAIL: the body of an email. Context keys: subject, sender and reply_to.
+    - SMS: the body of a text message. Context keys: region (an ISO 3166-1 alpha-2 code) and
+      sender_id.
+    - WEB_PAGE: text extracted from a web page. Context keys: url (required), final_url, title,
+      description and language.
+    - HOSTNAME: a DNS name. Context keys: query_type.
+    - URL: an absolute URL. No context keys are defined.
+    """
+
+    TEXT = "TEXT"
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WEB_PAGE = "WEB_PAGE"
+    HOSTNAME = "HOSTNAME"
+    URL = "URL"
+
+
 class EntityRelationshipType(StrEnum):
     """Nature of a relationship between two entities."""
 

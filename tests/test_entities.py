@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 import respx
 
-from pyfederation import EntityRelationshipType, SuggestedAction
+from pyfederation import EntityRelationshipType, IncidentType, SuggestedAction
 
 from . import payloads
 from .utils import run
@@ -47,6 +47,16 @@ async def test_query_entity(client: Any, api: respx.MockRouter) -> None:
 
     assert result.suggested_action is SuggestedAction.TEMPORARILY_BLOCK_ENTITY
     assert result.active_blacklists[0].uuid == payloads.BLACKLIST_UUID
+
+
+async def test_query_entity_with_concerns(client: Any, api: respx.MockRouter) -> None:
+    route = api.get(f"{ENTITY}/query").respond(
+        json={"entity_record": payloads.entity(), "related_entities": [], "active_blacklists": []}
+    )
+
+    await run(client.query_entity(ADDRESS, [IncidentType.MALWARE, IncidentType.PHISHING]))
+
+    assert route.calls.last.request.url.params["concerns"] == "MALWARE,PHISHING"
 
 
 async def test_list_entities(client: Any, api: respx.MockRouter) -> None:
@@ -209,6 +219,7 @@ async def test_clear_entity_relationship(client: Any, api: respx.MockRouter) -> 
             ),
             "Related entity identifier cannot be empty",
         ),
+        (lambda client: client.query_entity(ADDRESS, []), "Concerns cannot be empty"),
         (lambda client: client.get_top_threats(0), "Limit must be greater than 0"),
         (lambda client: client.list_entities(limit=0), "Limit must be greater than 0"),
     ],

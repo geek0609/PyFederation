@@ -13,9 +13,11 @@ import pytest
 from pyfederation import (
     AsyncFederationClient,
     ClassificationFlag,
+    ContentType,
     EntityRelationshipType,
     FederationClient,
     IncidentType,
+    NamedEntityType,
     RecordType,
     SuggestedAction,
 )
@@ -155,6 +157,10 @@ def record_property(record: str, name: str) -> Any:
         ),
         (RecordType, query_parameter("/search", "get", "type")),
         (SuggestedAction, record_property("EntityQueryResult", "suggested_action")),
+        (IncidentType, request_property("/scan", "post", "concerns")["items"]),
+        (IncidentType, record_property("Detection", "concern")),
+        (ContentType, record_property("ContentInput", "content_type")),
+        (NamedEntityType, record_property("ResolvedEntityPosition", "type")),
     ],
 )
 def test_enums_cover_the_specification(enum: type[StrEnum], schema: Any) -> None:
