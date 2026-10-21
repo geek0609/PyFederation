@@ -25,6 +25,19 @@ async def test_entity_identifiers(client: Any, records: Records) -> None:
     assert await run(client.push_entity(host, "john")) == entity_uuid
 
 
+@pytest.mark.parametrize("local_part", ["user+tag", "user%41b"])
+async def test_entity_addresses_with_reserved_characters(
+    client: Any, records: Records, local_part: str
+) -> None:
+    host = f"{unique('encoded')}.com"
+    entity_uuid = records.track("delete_entity", await run(client.push_entity(host, local_part)))
+
+    entity = await run(client.get_entity_record(f"{local_part}@{host}"))
+
+    assert entity.uuid == entity_uuid
+    assert entity.id == local_part
+
+
 async def test_update_entity(client: Any, records: Records) -> None:
     entity_uuid = await records.entity()
 

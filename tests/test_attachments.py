@@ -53,7 +53,7 @@ async def test_list_attachments(client: Any, api: respx.MockRouter) -> None:
         "page": "1",
         "limit": "100",
         "category": "IMAGE",
-        "by": "file_size",
+        "by": "FILE_SIZE",
         "order": "DESC",
     }
 

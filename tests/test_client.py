@@ -241,7 +241,14 @@ async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> N
 @pytest.mark.parametrize(
     ("call", "message"),
     [
-        (lambda client: client.search("a"), "Search query must be at least 2 characters"),
+        (
+            lambda client: client.search("a"),
+            "Search query must contain at least 2 non-whitespace characters",
+        ),
+        (
+            lambda client: client.search(" a "),
+            "Search query must contain at least 2 non-whitespace characters",
+        ),
         (lambda client: client.search("spam", page=0), "Page must be greater than 0"),
         (lambda client: client.scan_content([]), "Evidence cannot be empty"),
         (lambda client: client.scan_content("spam", concerns=[]), "Concerns cannot be empty"),

@@ -68,7 +68,7 @@ async def test_list_operators(client: Any, api: respx.MockRouter) -> None:
         "page": "1",
         "limit": "100",
         "category": "ENABLED",
-        "by": "name",
+        "by": "NAME",
         "order": "ASC",
     }
     assert operators[0].uuid == payloads.OPERATOR_UUID
@@ -237,7 +237,10 @@ async def test_list_operator_reports(
             lambda client: client.list_operator_reports(payloads.OPERATOR_UUID, page=0),
             "Page must be greater than 0",
         ),
-        (lambda client: client.search_operators("a"), "Search query must be at least 2 characters"),
+        (
+            lambda client: client.search_operators("a"),
+            "Search query must contain at least 2 non-whitespace characters",
+        ),
     ],
 )
 async def test_invalid_arguments(client: Any, call: Callable[[Any], Any], message: str) -> None:

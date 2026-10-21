@@ -21,7 +21,7 @@ async def test_list_audit_logs(client: Any, api: respx.MockRouter) -> None:
         "page": "2",
         "limit": "50",
         "category": "ENTITY_EVENTS",
-        "by": "timestamp",
+        "by": "TIMESTAMP",
         "order": "DESC",
     }
     assert logs[0].type is AuditLogType.ENTITY_PUSHED
@@ -60,10 +60,10 @@ async def test_search_audit_logs(client: Any, api: respx.MockRouter) -> None:
 async def test_sort_parameters_are_normalized(client: Any, api: respx.MockRouter) -> None:
     route = api.get("/").respond(json=[])
 
-    await run(client.list_audit_logs(by="TIMESTAMP", order="desc"))
+    await run(client.list_audit_logs(by="timestamp", order="desc"))
 
     params = route.calls.last.request.url.params
-    assert (params["by"], params["order"]) == ("timestamp", "DESC")
+    assert (params["by"], params["order"]) == ("TIMESTAMP", "DESC")
 
 
 async def test_identifiers_are_one_path_segment(client: Any, api: respx.MockRouter) -> None:
@@ -83,7 +83,7 @@ async def test_identifiers_are_one_path_segment(client: Any, api: respx.MockRout
         (lambda client: client.get_audit_log_record(".."), "Identifier cannot be"),
         (
             lambda client: client.search_audit_logs("a"),
-            "Search query must be at least 2 characters",
+            "Search query must contain at least 2 non-whitespace characters",
         ),
     ],
 )
