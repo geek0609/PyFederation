@@ -7,6 +7,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel
 
+from .enums import ContentType
 from .records import ContentInput
 
 M = TypeVar("M", bound=BaseModel)
@@ -77,6 +78,15 @@ def parse_list(model: type[M], data: list[Any]) -> list[M]:
     return [model.model_validate(item) for item in data]
 
 
+def content_payload(content: ContentInput) -> dict[str, Any]:
+    payload = compact(**asdict(content))
+    # TEXT is the default content type, which is not sent
+    if content.content_type is ContentType.TEXT:
+        del payload["content_type"]
+
+    return payload
+
+
 def evidence_payload(
     evidence: str | ContentInput | Sequence[ContentInput],
 ) -> dict[str, Any] | list[dict[str, Any]]:
@@ -84,12 +94,12 @@ def evidence_payload(
         evidence = ContentInput(evidence)
 
     if isinstance(evidence, ContentInput):
-        return compact(**asdict(evidence))
+        return content_payload(evidence)
 
     if not evidence:
         raise ValueError("Evidence cannot be empty")
 
-    return [compact(**asdict(item)) for item in evidence]
+    return [content_payload(item) for item in evidence]
 
 
 def attachment_file_name(response: httpx.Response, default: str) -> str:

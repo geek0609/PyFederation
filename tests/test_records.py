@@ -94,6 +94,41 @@ def test_scanned_content_resolves_nested_entities() -> None:
     assert resolved.parent_entity.entity.host == "example.com"
 
 
+def test_scanned_content_detections() -> None:
+    content = ScannedContent.model_validate(
+        {
+            "resolved_entities": [],
+            "scan_results": {},
+            "risk_score": 75,
+            "detections": [
+                {
+                    "concern": "SPAM",
+                    "content_index": 1,
+                    "entity": payloads.ENTITY_UUID,
+                    "source": "blacklist",
+                    "confidence": None,
+                    "verified": True,
+                },
+                {
+                    "concern": "TRACKING",
+                    "content_index": 0,
+                    "entity": None,
+                    "source": "filter_list",
+                    "confidence": 0.5,
+                    "verified": False,
+                },
+            ],
+        }
+    )
+
+    assert [detection.concern for detection in content.detections] == [
+        IncidentType.SPAM,
+        IncidentType.TRACKING,
+    ]
+    assert content.detections[0].entity == payloads.ENTITY_UUID
+    assert not content.detections[1].verified
+
+
 def test_operator_configuration() -> None:
     operator = OperatorRecord.model_validate(
         payloads.operator(

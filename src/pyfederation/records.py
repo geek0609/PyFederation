@@ -20,6 +20,7 @@ from pydantic import (
 from .enums import (
     AuditLogType,
     ClassificationFlag,
+    ContentType,
     EntityRelationshipType,
     IncidentType,
     NamedEntityType,
@@ -48,13 +49,19 @@ class _Record(BaseModel):
 
 @dataclass(frozen=True)
 class ContentInput:
-    """A piece of content submitted for scanning or attached to a report submission."""
+    """A piece of content submitted for scanning or attached to a report submission.
+
+    The context describes the content as the client observed it, its keys are defined per content
+    type. It is an assertion of the client, which the server does not verify.
+    """
 
     text_content: str | None = None
     note: str | None = None
     tag: str | None = None
     confidential: bool = False
     metadata: dict[str, Any] | None = None
+    content_type: ContentType = ContentType.TEXT
+    context: dict[str, str] | None = None
 
 
 class AuditLog(_Record):
@@ -91,6 +98,21 @@ class ContentClassification(_Record):
     classification_flag: _Lenient[ClassificationFlag]
     confidence: float
     detected_language: str | None = None
+
+
+class Detection(_Record):
+    """A finding of the server about scanned content with respect to one of the concerns of a scan.
+
+    A detection that is not verified relies on context or other assertions of the client, and
+    should be weighed as no stronger than them.
+    """
+
+    concern: IncidentType
+    content_index: int
+    entity: str | None = None
+    source: str
+    confidence: float | None = None
+    verified: bool
 
 
 class EntityRecord(_Record):
@@ -278,6 +300,7 @@ class ScannedContent(_Record):
     suggested_lift_timestamp: int | None = None
     scan_results: dict[str, float]
     risk_score: float
+    detections: list[Detection] = []
 
 
 class ServerInformation(_Record):
