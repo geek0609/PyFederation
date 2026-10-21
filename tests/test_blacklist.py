@@ -93,6 +93,25 @@ async def test_list_blacklist_records(client: Any, api: respx.MockRouter) -> Non
     assert records[0].report == payloads.REPORT_UUID
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "arguments"),
+    [
+        ("list_blacklist_records", "/blacklist", ()),
+        ("search_blacklist", "/blacklist/search", ("spam",)),
+    ],
+)
+async def test_blacklist_type_filter(
+    client: Any, api: respx.MockRouter, method: str, path: str, arguments: tuple[str, ...]
+) -> None:
+    route = api.get(path).respond(json=[])
+
+    await run(
+        getattr(client, method)(*arguments, types=[IncidentType.ADVERTISING, IncidentType.TRACKING])
+    )
+
+    assert route.calls.last.request.url.params["type"] == "ADVERTISING,TRACKING"
+
+
 async def test_search_blacklist(client: Any, api: respx.MockRouter) -> None:
     route = api.get("/blacklist/search").respond(json=[payloads.blacklist()])
 
@@ -112,6 +131,10 @@ async def test_search_blacklist(client: Any, api: respx.MockRouter) -> None:
         (
             lambda client: client.blacklist_entity("", IncidentType.SPAM),
             "Entity identifier cannot be empty",
+        ),
+        (
+            lambda client: client.blacklist_entity(payloads.ENTITY_UUID, IncidentType.SPAM, ""),
+            "Report UUID cannot be empty",
         ),
         (
             lambda client: client.blacklist_entity(

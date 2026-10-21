@@ -1222,10 +1222,13 @@ class FederationClient:
         Args:
             entity_identifier: The entity to blacklist.
             incident_type: The type of the incident the entity is blacklisted for.
-            report_uuid: The report supporting the decision.
+            report_uuid: The report supporting the decision, which may concern another entity,
+                such as the domain a reported account advertised.
             expires: When the blacklist expires, or None for a permanent blacklist.
         """
         require(entity_identifier, "Entity identifier")
+        if report_uuid is not None:
+            require(report_uuid, "Report UUID")
         if expires is not None and expires < 0:
             raise ValueError("The expires parameter must be a positive integer or None")
 
@@ -1289,13 +1292,15 @@ class FederationClient:
         category: str | None = None,
         by: str | None = None,
         order: str | None = None,
+        types: Sequence[IncidentType] | None = None,
     ) -> list[BlacklistRecord]:
-        """Lists blacklist records."""
+        """Lists blacklist records, of the given incident types only if any are given."""
         params = page_params(
             page,
             limit,
             include_lifted=include_lifted,
             category=category,
+            type=",".join(types) if types else None,
             by=by,
             order=order,
         )
@@ -1315,9 +1320,18 @@ class FederationClient:
         category: str | None = None,
         by: str | None = None,
         order: str | None = None,
+        types: Sequence[IncidentType] | None = None,
     ) -> list[BlacklistRecord]:
-        """Searches blacklist records."""
-        params = search_params(query, page, limit, category=category, by=by, order=order)
+        """Searches blacklist records, of the given incident types only if any are given."""
+        params = search_params(
+            query,
+            page,
+            limit,
+            category=category,
+            type=",".join(types) if types else None,
+            by=by,
+            order=order,
+        )
         data = self._request(
             "GET",
             "blacklist/search",
