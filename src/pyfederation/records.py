@@ -169,18 +169,64 @@ class OperatorCreated(_Record):
     access_token: str = Field(repr=False)
 
 
+class OperatorPermissions(_Record):
+    """The permission groups of an operator.
+
+    Management permissions inherit client permissions, so client is True whenever management is.
+    """
+
+    client: bool
+    management: bool
+    operator: bool
+
+
+class OperatorConfiguration(_Record):
+    """The settings of an operator.
+
+    A server only discloses them to the operator itself and to operators with operator permissions.
+    """
+
+    auto_assign_reports: bool
+    auto_assign_automated_reports: bool
+    is_bot: bool
+
+
 class OperatorRecord(_Record):
-    """An account of the Federation server and its permissions."""
+    """An account of the Federation server, its permissions and its settings.
+
+    The configuration is None when the server did not disclose it, and the properties reading it
+    are then False.
+    """
 
     uuid: str
     name: str
     disabled: bool
-    client_permissions: bool
-    management_permissions: bool
-    operator_permissions: bool
-    auto_assign: bool
+    permissions: OperatorPermissions = OperatorPermissions(
+        client=False, management=False, operator=False
+    )
+    configuration: OperatorConfiguration | None = None
     created: int
     updated: int
+
+    @property
+    def auto_assign_reports(self) -> bool:
+        """Whether reports that are not automated are automatically assigned to the operator."""
+        return self.configuration is not None and self.configuration.auto_assign_reports
+
+    @property
+    def auto_assign_automated_reports(self) -> bool:
+        """Whether automated reports are automatically assigned to the operator."""
+        return self.configuration is not None and self.configuration.auto_assign_automated_reports
+
+    @property
+    def auto_assigned(self) -> bool:
+        """Whether reports of either kind are automatically assigned to the operator."""
+        return self.auto_assign_reports or self.auto_assign_automated_reports
+
+    @property
+    def is_bot(self) -> bool:
+        """Whether the operator is a bot, whose evidence and reports are automated."""
+        return self.configuration is not None and self.configuration.is_bot
 
 
 class ReportRecord(_Record):

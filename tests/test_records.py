@@ -94,6 +94,30 @@ def test_scanned_content_resolves_nested_entities() -> None:
     assert resolved.parent_entity.entity.host == "example.com"
 
 
+def test_operator_configuration() -> None:
+    operator = OperatorRecord.model_validate(
+        payloads.operator(
+            configuration={
+                "auto_assign_reports": False,
+                "auto_assign_automated_reports": True,
+                "is_bot": True,
+            }
+        )
+    )
+
+    assert not operator.auto_assign_reports
+    assert operator.auto_assign_automated_reports
+    assert operator.auto_assigned
+    assert operator.is_bot
+
+
+def test_operator_with_undisclosed_configuration() -> None:
+    operator = OperatorRecord.model_validate(payloads.operator(configuration=None))
+
+    assert not operator.auto_assigned
+    assert not operator.is_bot
+
+
 def test_unrecognized_incident_and_audit_log_types_are_read_as_other() -> None:
     assert BlacklistRecord.model_validate(payloads.blacklist(type="NEW")).type is IncidentType.OTHER
     assert AuditLog.model_validate(payloads.audit_log(type="NEW")).type is AuditLogType.OTHER

@@ -116,8 +116,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "type",
-                                "timestamp"
+                                "TYPE",
+                                "TIMESTAMP"
                             ]
                         }
                     },
@@ -181,7 +181,7 @@
                     "Attachments"
                 ],
                 "summary": "Upload a file attachment",
-                "description": "Uploads a file as an attachment, optionally associating it with an evidence record. Client permissions are required.",
+                "description": "Uploads a file as an attachment and associates it with an evidence record. The file is either uploaded directly as a multipart/form-data part or retrieved by the server from an HTTP or HTTPS URL, but not both. Client permissions are required, and management permissions to attach a file to evidence submitted by another operator.",
                 "operationId": "uploadAttachment",
                 "parameters": [],
                 "responses": {
@@ -197,7 +197,7 @@
                         "summary": "File uploaded successfully"
                     },
                     "400": {
-                        "description": "Invalid request, missing file, invalid UUID, or validation failure",
+                        "description": "Invalid request, missing or conflicting file and URL, invalid UUID, a URL that is not permitted or could not be retrieved, or validation failure",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -205,7 +205,7 @@
                                 }
                             }
                         },
-                        "summary": "Invalid request, missing file, invalid UUID, or validation failure"
+                        "summary": "Invalid request, missing or conflicting file and URL, invalid UUID, a URL that is not permitted or could not be retrieved, or validation failure"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -219,7 +219,7 @@
                         "summary": "Authentication required"
                     },
                     "403": {
-                        "description": "Insufficient permissions to upload attachments",
+                        "description": "Insufficient permissions to upload attachments, or Files can only be attached to evidence submitted by the operator itself without management permissions",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -227,7 +227,7 @@
                                 }
                             }
                         },
-                        "summary": "Insufficient permissions to upload attachments"
+                        "summary": "Insufficient permissions to upload attachments, or Files can only be attached to evidence submitted by the operator itself without management permissions"
                     },
                     "404": {
                         "description": "Evidence not found",
@@ -262,7 +262,13 @@
                                     "file": {
                                         "type": "string",
                                         "format": "binary",
-                                        "description": "The file to upload"
+                                        "description": "The file to upload, required unless url is provided"
+                                    },
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
                                     },
                                     "evidence_uuid": {
                                         "type": "string",
@@ -271,7 +277,50 @@
                                     }
                                 },
                                 "required": [
-                                    "file",
+                                    "evidence_uuid"
+                                ]
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
+                                    },
+                                    "evidence_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "description": "UUID of the evidence record to associate the attachment with"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "evidence_uuid"
+                                ]
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
+                                    },
+                                    "evidence_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "description": "UUID of the evidence record to associate the attachment with"
+                                    }
+                                },
+                                "required": [
+                                    "url",
                                     "evidence_uuid"
                                 ]
                             }
@@ -284,7 +333,7 @@
                     "Attachments"
                 ],
                 "summary": "Upload a file attachment",
-                "description": "Uploads a file as an attachment, optionally associating it with an evidence record. Client permissions are required.",
+                "description": "Uploads a file as an attachment and associates it with an evidence record. The file is either uploaded directly as a multipart/form-data part or retrieved by the server from an HTTP or HTTPS URL, but not both. Client permissions are required, and management permissions to attach a file to evidence submitted by another operator.",
                 "operationId": "uploadAttachmentPut",
                 "parameters": [],
                 "responses": {
@@ -300,7 +349,7 @@
                         "summary": "File uploaded successfully"
                     },
                     "400": {
-                        "description": "Invalid request, missing file, invalid UUID, or validation failure",
+                        "description": "Invalid request, missing or conflicting file and URL, invalid UUID, a URL that is not permitted or could not be retrieved, or validation failure",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -308,7 +357,7 @@
                                 }
                             }
                         },
-                        "summary": "Invalid request, missing file, invalid UUID, or validation failure"
+                        "summary": "Invalid request, missing or conflicting file and URL, invalid UUID, a URL that is not permitted or could not be retrieved, or validation failure"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -322,7 +371,7 @@
                         "summary": "Authentication required"
                     },
                     "403": {
-                        "description": "Insufficient permissions to upload attachments",
+                        "description": "Insufficient permissions to upload attachments, or Files can only be attached to evidence submitted by the operator itself without management permissions",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -330,7 +379,7 @@
                                 }
                             }
                         },
-                        "summary": "Insufficient permissions to upload attachments"
+                        "summary": "Insufficient permissions to upload attachments, or Files can only be attached to evidence submitted by the operator itself without management permissions"
                     },
                     "404": {
                         "description": "Evidence not found",
@@ -365,7 +414,13 @@
                                     "file": {
                                         "type": "string",
                                         "format": "binary",
-                                        "description": "The file to upload"
+                                        "description": "The file to upload, required unless url is provided"
+                                    },
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
                                     },
                                     "evidence_uuid": {
                                         "type": "string",
@@ -374,7 +429,50 @@
                                     }
                                 },
                                 "required": [
-                                    "file",
+                                    "evidence_uuid"
+                                ]
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
+                                    },
+                                    "evidence_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "description": "UUID of the evidence record to associate the attachment with"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "evidence_uuid"
+                                ]
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri",
+                                        "maxLength": 2048,
+                                        "description": "An HTTP or HTTPS URL the server retrieves the file from, instead of uploading the file"
+                                    },
+                                    "evidence_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "description": "UUID of the evidence record to associate the attachment with"
+                                    }
+                                },
+                                "required": [
+                                    "url",
                                     "evidence_uuid"
                                 ]
                             }
@@ -432,10 +530,10 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "file_name",
-                                "file_mime",
-                                "file_size",
-                                "created"
+                                "FILE_NAME",
+                                "FILE_MIME",
+                                "FILE_SIZE",
+                                "CREATED"
                             ]
                         }
                     },
@@ -567,10 +665,10 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "file_name",
-                                "file_mime",
-                                "file_size",
-                                "created"
+                                "FILE_NAME",
+                                "FILE_MIME",
+                                "FILE_SIZE",
+                                "CREATED"
                             ]
                         }
                     },
@@ -717,7 +815,7 @@
                         "summary": "Insufficient permissions to view confidential evidence"
                     },
                     "404": {
-                        "description": "Attachment not found or Associated evidence not found",
+                        "description": "Attachment not found or its file does not exist",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -725,7 +823,7 @@
                                 }
                             }
                         },
-                        "summary": "Attachment not found or Associated evidence not found"
+                        "summary": "Attachment not found or its file does not exist"
                     },
                     "500": {
                         "description": "Internal server error while retrieving attachment",
@@ -805,7 +903,7 @@
                         "summary": "Insufficient permissions to delete attachments"
                     },
                     "404": {
-                        "description": "Attachment not found or Associated evidence not found",
+                        "description": "Attachment not found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -813,7 +911,7 @@
                                 }
                             }
                         },
-                        "summary": "Attachment not found or Associated evidence not found"
+                        "summary": "Attachment not found"
                     },
                     "500": {
                         "description": "Unable to delete file attachment",
@@ -986,8 +1084,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "type",
-                                "timestamp"
+                                "TYPE",
+                                "TIMESTAMP"
                             ]
                         }
                     },
@@ -1200,6 +1298,15 @@
                         }
                     },
                     {
+                        "name": "type",
+                        "in": "query",
+                        "description": "A comma-separated list of incident types, only blacklist records of one of these types are returned",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "by",
                         "in": "query",
                         "description": "Field to sort by",
@@ -1207,9 +1314,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "type",
-                                "expires",
-                                "created"
+                                "TYPE",
+                                "EXPIRES",
+                                "CREATED"
                             ]
                         }
                     },
@@ -1241,6 +1348,17 @@
                             }
                         },
                         "summary": "List of blacklist records"
+                    },
+                    "400": {
+                        "description": "The type parameter must be a comma-separated list of incident types",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "summary": "The type parameter must be a comma-separated list of incident types"
                     },
                     "401": {
                         "description": "You must be authenticated to list blacklist records",
@@ -1365,6 +1483,8 @@
                                             "ILLEGAL_CONTENT",
                                             "MALWARE",
                                             "PHISHING",
+                                            "ADVERTISING",
+                                            "TRACKING",
                                             "OTHER"
                                         ]
                                     },
@@ -1374,7 +1494,7 @@
                                             "null"
                                         ],
                                         "format": "uuid",
-                                        "description": "UUID of the report supporting the blacklist"
+                                        "description": "UUID of the report supporting the blacklist, which may concern another entity"
                                     },
                                     "expires": {
                                         "type": [
@@ -1451,6 +1571,15 @@
                         }
                     },
                     {
+                        "name": "type",
+                        "in": "query",
+                        "description": "A comma-separated list of incident types, only blacklist records of one of these types are returned",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "by",
                         "in": "query",
                         "description": "Field to sort by",
@@ -1458,9 +1587,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "type",
-                                "expires",
-                                "created"
+                                "TYPE",
+                                "EXPIRES",
+                                "CREATED"
                             ]
                         }
                     },
@@ -1494,7 +1623,7 @@
                         "summary": "List of matching blacklist records"
                     },
                     "400": {
-                        "description": "Search query is required",
+                        "description": "Search query is required, or the type parameter must be a comma-separated list of incident types",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1502,7 +1631,7 @@
                                 }
                             }
                         },
-                        "summary": "Search query is required"
+                        "summary": "Search query is required, or the type parameter must be a comma-separated list of incident types"
                     },
                     "401": {
                         "description": "Authentication is required to search blacklist records",
@@ -1959,11 +2088,11 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "host",
-                                "id",
-                                "reputation",
-                                "created",
-                                "updated"
+                                "HOST",
+                                "ID",
+                                "REPUTATION",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -2201,11 +2330,11 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "host",
-                                "id",
-                                "reputation",
-                                "created",
-                                "updated"
+                                "HOST",
+                                "ID",
+                                "REPUTATION",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -2695,8 +2824,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "type",
-                                "timestamp"
+                                "TYPE",
+                                "TIMESTAMP"
                             ]
                         }
                     },
@@ -3113,6 +3242,15 @@
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "name": "concerns",
+                        "in": "query",
+                        "description": "A comma-separated list of concerns whose blacklist records determine the suggested action. Defaults to the default concerns of the server",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -3128,7 +3266,7 @@
                         "summary": "Entity relationship group retrieved successfully"
                     },
                     "400": {
-                        "description": "Given identifier is not a valid UUID, SHA-256, or entity address input",
+                        "description": "Given identifier is not a valid UUID, SHA-256, or entity address input, or concerns must be a comma-separated list of concerns this server can assess",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3136,7 +3274,7 @@
                                 }
                             }
                         },
-                        "summary": "Given identifier is not a valid UUID, SHA-256, or entity address input"
+                        "summary": "Given identifier is not a valid UUID, SHA-256, or entity address input, or concerns must be a comma-separated list of concerns this server can assess"
                     },
                     "401": {
                         "description": "Querying entities is not available to the public, authentication is required",
@@ -3643,7 +3781,9 @@
                                 "CONFIDENTIAL",
                                 "NOT_CONFIDENTIAL",
                                 "CLASSIFIED",
-                                "UNCLASSIFIED"
+                                "UNCLASSIFIED",
+                                "AUTOMATED",
+                                "NOT_AUTOMATED"
                             ]
                         }
                     },
@@ -3655,10 +3795,10 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "tag",
-                                "classification_flag",
-                                "created",
-                                "updated"
+                                "TAG",
+                                "CLASSIFICATION_FLAG",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -3825,7 +3965,7 @@
                                                     "string",
                                                     "null"
                                                 ],
-                                                "description": "Optional immutable classification assigned to the evidence. Requires management permissions.",
+                                                "description": "Optional classification assigned to the evidence. Requires management permissions.",
                                                 "enum": [
                                                     "NORMAL",
                                                     "SUSPICIOUS",
@@ -3897,7 +4037,9 @@
                                 "CONFIDENTIAL",
                                 "NOT_CONFIDENTIAL",
                                 "CLASSIFIED",
-                                "UNCLASSIFIED"
+                                "UNCLASSIFIED",
+                                "AUTOMATED",
+                                "NOT_AUTOMATED"
                             ]
                         }
                     },
@@ -3909,10 +4051,10 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "tag",
-                                "classification_flag",
-                                "created",
-                                "updated"
+                                "TAG",
+                                "CLASSIFICATION_FLAG",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -4269,7 +4411,7 @@
                     "Evidence"
                 ],
                 "summary": "Classify evidence",
-                "description": "Assigns an immutable classification to evidence. Requires management permissions.",
+                "description": "Assigns a classification to evidence, replacing its existing classification if it has one. Requires management permissions.",
                 "operationId": "classifyEvidence",
                 "parameters": [
                     {
@@ -4338,17 +4480,6 @@
                             }
                         },
                         "summary": "Evidence not found"
-                    },
-                    "409": {
-                        "description": "Evidence has already been classified",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Evidence has already been classified"
                     },
                     "500": {
                         "description": "Unable to classify evidence",
@@ -4504,7 +4635,7 @@
                     "Evidence"
                 ],
                 "summary": "Update evidence confidentiality",
-                "description": "Updates the confidentiality flag of an evidence record. Requires management permissions.",
+                "description": "Updates the confidentiality flag of an evidence record. Requires management permissions. Evidence linked to an ILLEGAL_CONTENT report cannot be made non-confidential.",
                 "operationId": "updateEvidenceConfidentiality",
                 "parameters": [
                     {
@@ -4573,6 +4704,17 @@
                             }
                         },
                         "summary": "Evidence not found"
+                    },
+                    "409": {
+                        "description": "Evidence linked to an ILLEGAL_CONTENT report must remain confidential",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "summary": "Evidence linked to an ILLEGAL_CONTENT report must remain confidential"
                     },
                     "500": {
                         "description": "Unable to update evidence confidentiality",
@@ -4790,9 +4932,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "name",
-                                "created",
-                                "updated"
+                                "NAME",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -5055,9 +5197,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "name",
-                                "created",
-                                "updated"
+                                "NAME",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -5216,7 +5358,7 @@
                         "summary": "Authentication required"
                     },
                     "403": {
-                        "description": "Insufficient permissions to delete operators",
+                        "description": "The operator lacks operator permissions, the target is a builtin operator, or the target created evidence, reports or blacklist records and the operator lacks management permissions",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5224,7 +5366,7 @@
                                 }
                             }
                         },
-                        "summary": "Insufficient permissions to delete operators"
+                        "summary": "The operator lacks operator permissions, the target is a builtin operator, or the target created evidence, reports or blacklist records and the operator lacks management permissions"
                     },
                     "404": {
                         "description": "Operator not found",
@@ -5471,115 +5613,6 @@
                 }
             }
         },
-        "/operators/{uuid}/auto-assign": {
-            "patch": {
-                "tags": [
-                    "Operators"
-                ],
-                "summary": "Manage auto assign for an operator",
-                "description": "Enables or disables the ability for an operator to automatically receive assigned reports. Cannot modify auto assign for builtin operators (root/system). Requires operator management permissions.",
-                "operationId": "manageAutoAssign",
-                "parameters": [
-                    {
-                        "name": "uuid",
-                        "in": "path",
-                        "description": "Operator UUID",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Operator auto assign updated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/SuccessResponse"
-                                }
-                            }
-                        },
-                        "summary": "Operator auto assign updated successfully"
-                    },
-                    "400": {
-                        "description": "Invalid operator UUID",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Invalid operator UUID"
-                    },
-                    "401": {
-                        "description": "Authentication required",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Authentication required"
-                    },
-                    "403": {
-                        "description": "Insufficient permissions to manage permissions",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Insufficient permissions to manage permissions"
-                    },
-                    "404": {
-                        "description": "Operator not found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Operator not found"
-                    },
-                    "500": {
-                        "description": "Unable to manage operator's auto assign",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Unable to manage operator's auto assign"
-                    }
-                },
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "enabled": {
-                                        "type": "boolean",
-                                        "description": "Whether auto assign should be enabled"
-                                    }
-                                },
-                                "required": [
-                                    "enabled"
-                                ]
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/operators/{uuid}/blacklist": {
             "get": {
                 "tags": [
@@ -5691,14 +5724,14 @@
                 }
             }
         },
-        "/operators/{uuid}/client-permissions": {
+        "/operators/{uuid}/configuration": {
             "patch": {
                 "tags": [
                     "Operators"
                 ],
-                "summary": "Manage client permissions for an operator",
-                "description": "Enables or disables client permissions for an operator. Cannot modify permissions for the root operator. Requires operator management permissions.",
-                "operationId": "manageClientPermissions",
+                "summary": "Update the configuration of an operator",
+                "description": "Changes the automatic report assignment opt-ins of an operator and whether it is a bot, whose evidence and reports are automated and whose evidence is created confidential. Settings that are not supplied are left unchanged. Cannot modify the root or system operator. An operator can change its own configuration; changing that of another operator requires operator permissions.",
+                "operationId": "updateOperatorConfiguration",
                 "parameters": [
                     {
                         "name": "uuid",
@@ -5713,18 +5746,18 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Client permissions updated successfully",
+                        "description": "The updated configuration of the operator",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/SuccessResponse"
+                                    "$ref": "#/components/schemas/OperatorConfiguration"
                                 }
                             }
                         },
-                        "summary": "Client permissions updated successfully"
+                        "summary": "The updated configuration of the operator"
                     },
                     "400": {
-                        "description": "Invalid operator UUID",
+                        "description": "The request must contain one or more of auto_assign_reports, auto_assign_automated_reports and is_bot, each a boolean",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5732,7 +5765,7 @@
                                 }
                             }
                         },
-                        "summary": "Invalid operator UUID"
+                        "summary": "The request must contain one or more of auto_assign_reports, auto_assign_automated_reports and is_bot, each a boolean"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -5746,7 +5779,7 @@
                         "summary": "Authentication required"
                     },
                     "403": {
-                        "description": "Insufficient permissions to manage permissions",
+                        "description": "Only the operator itself or an operator with operator permissions can change its configuration",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5754,7 +5787,7 @@
                                 }
                             }
                         },
-                        "summary": "Insufficient permissions to manage permissions"
+                        "summary": "Only the operator itself or an operator with operator permissions can change its configuration"
                     },
                     "404": {
                         "description": "Operator not found",
@@ -5768,7 +5801,7 @@
                         "summary": "Operator not found"
                     },
                     "500": {
-                        "description": "Unable to manage operator's permissions",
+                        "description": "Unable to update the operator's configuration",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5776,7 +5809,7 @@
                                 }
                             }
                         },
-                        "summary": "Unable to manage operator's permissions"
+                        "summary": "Unable to update the operator's configuration"
                     }
                 },
                 "requestBody": {
@@ -5786,14 +5819,21 @@
                             "schema": {
                                 "type": "object",
                                 "properties": {
-                                    "enabled": {
+                                    "auto_assign_reports": {
                                         "type": "boolean",
-                                        "description": "Whether client permissions should be enabled"
+                                        "description": "Whether the operator opts in to the automatic assignment of reports that are not automated"
+                                    },
+                                    "auto_assign_automated_reports": {
+                                        "type": "boolean",
+                                        "description": "Whether the operator opts in to the automatic assignment of automated reports"
+                                    },
+                                    "is_bot": {
+                                        "type": "boolean",
+                                        "description": "Whether the operator is a bot, the evidence and reports it submits are automated and its evidence is created confidential"
                                     }
                                 },
-                                "required": [
-                                    "enabled"
-                                ]
+                                "additionalProperties": false,
+                                "minProperties": 1
                             }
                         }
                     }
@@ -6102,14 +6142,14 @@
                 }
             }
         },
-        "/operators/{uuid}/management-permissions": {
+        "/operators/{uuid}/permissions": {
             "patch": {
                 "tags": [
                     "Operators"
                 ],
-                "summary": "Manage management permissions for an operator",
-                "description": "Enables or disables management permissions for an operator. Cannot modify permissions for the root operator. Requires operator management permissions.",
-                "operationId": "manageManagementPermissions",
+                "summary": "Update the permissions of an operator",
+                "description": "Grants or revokes the client, management and operator permission groups of an operator, leaving the groups that are not supplied unchanged. Management permissions inherit client permissions, so an operator with management permissions keeps client permissions. Cannot modify the root or system operator. Requires operator permissions.",
+                "operationId": "updateOperatorPermissions",
                 "parameters": [
                     {
                         "name": "uuid",
@@ -6124,18 +6164,18 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Management permissions updated successfully",
+                        "description": "The updated permissions of the operator",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/SuccessResponse"
+                                    "$ref": "#/components/schemas/OperatorPermissions"
                                 }
                             }
                         },
-                        "summary": "Management permissions updated successfully"
+                        "summary": "The updated permissions of the operator"
                     },
                     "400": {
-                        "description": "Invalid operator UUID",
+                        "description": "The request must contain one or more of client, management and operator, each a boolean",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -6143,7 +6183,7 @@
                                 }
                             }
                         },
-                        "summary": "Invalid operator UUID"
+                        "summary": "The request must contain one or more of client, management and operator, each a boolean"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -6178,8 +6218,8 @@
                         },
                         "summary": "Operator not found"
                     },
-                    "500": {
-                        "description": "Unable to manage operator's permissions",
+                    "409": {
+                        "description": "Management permissions inherit client permissions, an operator with management permissions must keep client permissions",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -6187,7 +6227,18 @@
                                 }
                             }
                         },
-                        "summary": "Unable to manage operator's permissions"
+                        "summary": "Management permissions inherit client permissions, an operator with management permissions must keep client permissions"
+                    },
+                    "500": {
+                        "description": "Unable to update the operator's permissions",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "summary": "Unable to update the operator's permissions"
                     }
                 },
                 "requestBody": {
@@ -6197,123 +6248,21 @@
                             "schema": {
                                 "type": "object",
                                 "properties": {
-                                    "enabled": {
+                                    "client": {
                                         "type": "boolean",
-                                        "description": "Whether management permissions should be enabled"
+                                        "description": "Whether the operator holds client permissions"
+                                    },
+                                    "management": {
+                                        "type": "boolean",
+                                        "description": "Whether the operator holds management permissions"
+                                    },
+                                    "operator": {
+                                        "type": "boolean",
+                                        "description": "Whether the operator holds operator permissions"
                                     }
                                 },
-                                "required": [
-                                    "enabled"
-                                ]
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/operators/{uuid}/operator-permissions": {
-            "patch": {
-                "tags": [
-                    "Operators"
-                ],
-                "summary": "Manage operator management permissions for an operator",
-                "description": "Enables or disables the ability for an operator to manage other operators. Cannot modify permissions for builtin operators (root/system). Requires operator management permissions.",
-                "operationId": "manageOperatorPermissions",
-                "parameters": [
-                    {
-                        "name": "uuid",
-                        "in": "path",
-                        "description": "Operator UUID",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Operator management permissions updated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/SuccessResponse"
-                                }
-                            }
-                        },
-                        "summary": "Operator management permissions updated successfully"
-                    },
-                    "400": {
-                        "description": "Invalid operator UUID",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Invalid operator UUID"
-                    },
-                    "401": {
-                        "description": "Authentication required",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Authentication required"
-                    },
-                    "403": {
-                        "description": "Insufficient permissions to manage permissions",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Insufficient permissions to manage permissions"
-                    },
-                    "404": {
-                        "description": "Operator not found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Operator not found"
-                    },
-                    "500": {
-                        "description": "Unable to manage operator's permissions",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorResponse"
-                                }
-                            }
-                        },
-                        "summary": "Unable to manage operator's permissions"
-                    }
-                },
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "enabled": {
-                                        "type": "boolean",
-                                        "description": "Whether operator management permissions should be enabled"
-                                    }
-                                },
-                                "required": [
-                                    "enabled"
-                                ]
+                                "additionalProperties": false,
+                                "minProperties": 1
                             }
                         }
                     }
@@ -6868,6 +6817,8 @@
                                             "ILLEGAL_CONTENT",
                                             "MALWARE",
                                             "PHISHING",
+                                            "ADVERTISING",
+                                            "TRACKING",
                                             "OTHER"
                                         ]
                                     },
@@ -6941,9 +6892,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "incident_type",
-                                "created",
-                                "updated"
+                                "INCIDENT_TYPE",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -7038,9 +6989,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "incident_type",
-                                "created",
-                                "updated"
+                                "INCIDENT_TYPE",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -7163,9 +7114,9 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "incident_type",
-                                "created",
-                                "updated"
+                                "INCIDENT_TYPE",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -7445,7 +7396,7 @@
                         "summary": "Operator assigned to report successfully"
                     },
                     "400": {
-                        "description": "Operator is disabled",
+                        "description": "Operator is disabled, Invalid operator UUID, or A closed report cannot be assigned",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -7453,7 +7404,7 @@
                                 }
                             }
                         },
-                        "summary": "Operator is disabled"
+                        "summary": "Operator is disabled, Invalid operator UUID, or A closed report cannot be assigned"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -7556,7 +7507,7 @@
                         "summary": "Report closed successfully"
                     },
                     "400": {
-                        "description": "Invalid report UUID, Report not assigned to operator, The report is already closed, invalid classification, invalid blacklist type, or blacklist expiration in the past",
+                        "description": "Invalid report UUID, Report not assigned to operator, The report is already closed, The report concerns no entity to blacklist, invalid classification, invalid blacklist type, or blacklist expiration in the past",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -7564,7 +7515,7 @@
                                 }
                             }
                         },
-                        "summary": "Invalid report UUID, Report not assigned to operator, The report is already closed, invalid classification, invalid blacklist type, or blacklist expiration in the past"
+                        "summary": "Invalid report UUID, Report not assigned to operator, The report is already closed, The report concerns no entity to blacklist, invalid classification, invalid blacklist type, or blacklist expiration in the past"
                     },
                     "401": {
                         "description": "Authentication required",
@@ -7644,6 +7595,8 @@
                                             "ILLEGAL_CONTENT",
                                             "MALWARE",
                                             "PHISHING",
+                                            "ADVERTISING",
+                                            "TRACKING",
                                             "OTHER",
                                             null
                                         ]
@@ -7723,7 +7676,9 @@
                                 "CONFIDENTIAL",
                                 "NOT_CONFIDENTIAL",
                                 "CLASSIFIED",
-                                "UNCLASSIFIED"
+                                "UNCLASSIFIED",
+                                "AUTOMATED",
+                                "NOT_AUTOMATED"
                             ]
                         }
                     },
@@ -7735,10 +7690,10 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "tag",
-                                "classification_flag",
-                                "created",
-                                "updated"
+                                "TAG",
+                                "CLASSIFICATION_FLAG",
+                                "CREATED",
+                                "UPDATED"
                             ]
                         }
                     },
@@ -7835,7 +7790,7 @@
                     "Scan"
                 ],
                 "summary": "Scan content",
-                "description": "Scans one or more content messages for entities, blacklist records, and classifies the content using the enabled plugins. Requires client permissions if authenticated.",
+                "description": "Scans one or more content items for entities and blacklist records and classifies the content using the enabled plugins, interpreting each item according to its content type and assessing only the requested concerns. Requires client permissions unless scanning is public.",
                 "operationId": "scanContent",
                 "parameters": [],
                 "responses": {
@@ -7851,7 +7806,7 @@
                         "summary": "Scanned content results"
                     },
                     "400": {
-                        "description": "At least one evidence record must contain text content",
+                        "description": "At least one evidence record must contain text content, concerns must be a non-empty array of concerns this server can assess, or the author must be an entity identifier, and a telephone entity the international number as 1 to 15 digits without a leading + or separators, such as 15550123456@e164.arpa",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -7859,7 +7814,7 @@
                                 }
                             }
                         },
-                        "summary": "At least one evidence record must contain text content"
+                        "summary": "At least one evidence record must contain text content, concerns must be a non-empty array of concerns this server can assess, or the author must be an entity identifier, and a telephone entity the international number as 1 to 15 digits without a leading + or separators, such as 15550123456@e164"
                     },
                     "401": {
                         "description": "Scanning content is not available to the public, authentication is required",
@@ -7937,6 +7892,25 @@
                                         ],
                                         "format": "float",
                                         "description": "Confidence threshold for classification"
+                                    },
+                                    "concerns": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "enum": [
+                                                "SPAM",
+                                                "SCAM",
+                                                "SERVICE_ABUSE",
+                                                "ILLEGAL_CONTENT",
+                                                "MALWARE",
+                                                "PHISHING",
+                                                "ADVERTISING",
+                                                "TRACKING",
+                                                "OTHER"
+                                            ]
+                                        },
+                                        "minItems": 1,
+                                        "description": "The concerns to assess, only these affect the classification, risk score, suggested action and detections. Defaults to the default concerns of the server"
                                     }
                                 },
                                 "required": [
@@ -8145,6 +8119,14 @@
                         "format": "uuid",
                         "description": "UUID of the related file attachment"
                     },
+                    "report": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "UUID of the related report"
+                    },
                     "type": {
                         "type": "string",
                         "enum": [
@@ -8214,7 +8196,7 @@
                             "null"
                         ],
                         "format": "uuid",
-                        "description": "UUID of the supporting report"
+                        "description": "UUID of the supporting report, which may concern another entity"
                     },
                     "type": {
                         "type": "string",
@@ -8225,6 +8207,8 @@
                             "ILLEGAL_CONTENT",
                             "MALWARE",
                             "PHISHING",
+                            "ADVERTISING",
+                            "TRACKING",
                             "OTHER"
                         ],
                         "description": "Type of blacklist incident"
@@ -8300,7 +8284,32 @@
                             "string",
                             "null"
                         ],
-                        "description": "Text content"
+                        "description": "Text content, its form depends on the content type"
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "enum": [
+                            "TEXT",
+                            "EMAIL",
+                            "SMS",
+                            "WEB_PAGE",
+                            "HOSTNAME",
+                            "URL"
+                        ],
+                        "default": "TEXT",
+                        "description": "The content type, which tells the host how to interpret the text content"
+                    },
+                    "context": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "additionalProperties": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                        },
+                        "description": "Descriptive context of the content as the client observed it, its keys depend on the content type"
                     },
                     "note": {
                         "type": [
@@ -8345,6 +8354,61 @@
                     }
                 },
                 "required": []
+            },
+            "Detection": {
+                "type": "object",
+                "properties": {
+                    "concern": {
+                        "type": "string",
+                        "enum": [
+                            "SPAM",
+                            "SCAM",
+                            "SERVICE_ABUSE",
+                            "ILLEGAL_CONTENT",
+                            "MALWARE",
+                            "PHISHING",
+                            "ADVERTISING",
+                            "TRACKING",
+                            "OTHER"
+                        ],
+                        "description": "The concern the detection relates to, one of the effective concerns of the request"
+                    },
+                    "content_index": {
+                        "type": "integer",
+                        "description": "The zero-based position, in the evidence member of the request, of the content the detection relates to"
+                    },
+                    "entity": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "The UUID of the entity the detection relates to, when it relates to an entity resolved from the content"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "A host-defined name of the mechanism that made the detection, clients must not rely on particular values"
+                    },
+                    "confidence": {
+                        "type": [
+                            "number",
+                            "null"
+                        ],
+                        "description": "A host-defined confidence of the detection, when the mechanism provides one"
+                    },
+                    "verified": {
+                        "type": "boolean",
+                        "description": "False when the detection relies on context or other assertions of the client that the host has not verified"
+                    }
+                },
+                "required": [
+                    "concern",
+                    "content_index",
+                    "entity",
+                    "source",
+                    "confidence",
+                    "verified"
+                ]
             },
             "EntityRecord": {
                 "type": "object",
@@ -8542,12 +8606,40 @@
                         "type": "boolean",
                         "description": "Whether the evidence is marked as confidential"
                     },
+                    "automated": {
+                        "type": "boolean",
+                        "description": "Whether the evidence is automated: created by the server itself or submitted by a bot operator. Automated evidence is created confidential"
+                    },
                     "text_content": {
                         "type": [
                             "string",
                             "null"
                         ],
                         "description": "Text content of the evidence"
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "enum": [
+                            "TEXT",
+                            "EMAIL",
+                            "SMS",
+                            "WEB_PAGE",
+                            "HOSTNAME",
+                            "URL"
+                        ],
+                        "description": "The content type of the evidence, TEXT for evidence submitted without one"
+                    },
+                    "context": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "additionalProperties": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                        },
+                        "description": "The context submitted with the evidence, its keys depend on the content type"
                     },
                     "note": {
                         "type": [
@@ -8623,6 +8715,7 @@
                     "entity",
                     "operator",
                     "confidential",
+                    "automated",
                     "created"
                 ]
             },
@@ -8640,7 +8733,7 @@
                             "null"
                         ],
                         "format": "uuid",
-                        "description": "UUID of the evidence this file is attached to"
+                        "description": "UUID of the evidence this file is attached to, null when it is no longer associated with an evidence record"
                     },
                     "file_name": {
                         "type": "string",
@@ -8701,21 +8794,20 @@
                         "type": "boolean",
                         "description": "Whether the operator account is disabled"
                     },
-                    "client_permissions": {
-                        "type": "boolean",
-                        "description": "Whether the operator has client-level permissions"
+                    "permissions": {
+                        "$ref": "#/components/schemas/OperatorPermissions",
+                        "description": "The permission groups the operator holds"
                     },
-                    "management_permissions": {
-                        "type": "boolean",
-                        "description": "Whether the operator has management-level permissions"
-                    },
-                    "operator_permissions": {
-                        "type": "boolean",
-                        "description": "Whether the operator has operator-level permissions"
-                    },
-                    "auto_assign": {
-                        "type": "boolean",
-                        "description": "Whether the operator can automatically receive reports"
+                    "configuration": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/OperatorConfiguration"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "The configuration of the operator, null unless the requester is the operator itself or holds operator permissions"
                     },
                     "created": {
                         "type": "integer",
@@ -8730,12 +8822,54 @@
                     "uuid",
                     "name",
                     "disabled",
-                    "client_permissions",
-                    "management_permissions",
-                    "operator_permissions",
-                    "auto_assign",
+                    "permissions",
+                    "configuration",
                     "created",
                     "updated"
+                ]
+            },
+            "OperatorPermissions": {
+                "type": "object",
+                "properties": {
+                    "client": {
+                        "type": "boolean",
+                        "description": "Whether the operator holds client permissions, true whenever management is"
+                    },
+                    "management": {
+                        "type": "boolean",
+                        "description": "Whether the operator holds management permissions, which inherit client permissions"
+                    },
+                    "operator": {
+                        "type": "boolean",
+                        "description": "Whether the operator holds operator permissions"
+                    }
+                },
+                "required": [
+                    "client",
+                    "management",
+                    "operator"
+                ]
+            },
+            "OperatorConfiguration": {
+                "type": "object",
+                "properties": {
+                    "auto_assign_reports": {
+                        "type": "boolean",
+                        "description": "Whether the operator opts in to the automatic assignment of reports that are not automated"
+                    },
+                    "auto_assign_automated_reports": {
+                        "type": "boolean",
+                        "description": "Whether the operator opts in to the automatic assignment of automated reports"
+                    },
+                    "is_bot": {
+                        "type": "boolean",
+                        "description": "Whether the operator is a bot, the evidence and reports it submits are automated and its evidence is created confidential"
+                    }
+                },
+                "required": [
+                    "auto_assign_reports",
+                    "auto_assign_automated_reports",
+                    "is_bot"
                 ]
             },
             "ReportRecord": {
@@ -8780,6 +8914,8 @@
                             "ILLEGAL_CONTENT",
                             "MALWARE",
                             "PHISHING",
+                            "ADVERTISING",
+                            "TRACKING",
                             "OTHER"
                         ],
                         "description": "Type of incident being reported"
@@ -8893,7 +9029,8 @@
                             "url",
                             "email",
                             "ipv4",
-                            "ipv6"
+                            "ipv6",
+                            "telephone"
                         ],
                         "description": "Type of named entity detection"
                     }
@@ -8968,6 +9105,13 @@
                         "type": "number",
                         "format": "float",
                         "description": "The calculated content risk score"
+                    },
+                    "detections": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Detection"
+                        },
+                        "description": "The detections the host made with respect to the concerns of the request"
                     }
                 },
                 "required": [
@@ -9033,7 +9177,7 @@
                     },
                     "api_version": {
                         "type": "string",
-                        "description": "Version of the API"
+                        "description": "The OFD interface version implemented by the server, in the form MAJOR.MINOR"
                     },
                     "public_audit_logs": {
                         "type": "boolean",
@@ -9063,6 +9207,10 @@
                         "type": "boolean",
                         "description": "Whether content scanning is publicly accessible"
                     },
+                    "collects_public_scan_content": {
+                        "type": "boolean",
+                        "description": "Whether the server may store content submitted for scanning by unauthenticated requests, or records derived from it such as automated reports and evidence"
+                    },
                     "public_query_entity": {
                         "type": "boolean",
                         "description": "Whether entity relationship queries are publicly accessible"
@@ -9070,6 +9218,65 @@
                     "allow_illegal_content": {
                         "type": "boolean",
                         "description": "Whether the server accepts reports with the ILLEGAL_CONTENT incident type"
+                    },
+                    "allow_url_uploads": {
+                        "type": "boolean",
+                        "description": "Whether the server accepts attachments uploaded from a URL it retrieves itself"
+                    },
+                    "public_telephone_entities": {
+                        "type": "boolean",
+                        "description": "Whether telephone entities (number@e164.arpa) are exposed to unauthenticated requests like other entities, rather than hidden from requests that do not already know the number"
+                    },
+                    "scan_content_types": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "TEXT",
+                                "EMAIL",
+                                "SMS",
+                                "WEB_PAGE",
+                                "HOSTNAME",
+                                "URL"
+                            ]
+                        },
+                        "description": "The content types that content scanning interprets according to their type, always including TEXT"
+                    },
+                    "concerns": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "SPAM",
+                                "SCAM",
+                                "SERVICE_ABUSE",
+                                "ILLEGAL_CONTENT",
+                                "MALWARE",
+                                "PHISHING",
+                                "ADVERTISING",
+                                "TRACKING",
+                                "OTHER"
+                            ]
+                        },
+                        "description": "The concerns (incident types) the server can assess when scanning content or querying an entity"
+                    },
+                    "default_concerns": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "SPAM",
+                                "SCAM",
+                                "SERVICE_ABUSE",
+                                "ILLEGAL_CONTENT",
+                                "MALWARE",
+                                "PHISHING",
+                                "ADVERTISING",
+                                "TRACKING",
+                                "OTHER"
+                            ]
+                        },
+                        "description": "The concerns the server assesses when a request names none, a subset of concerns"
                     },
                     "search_enabled": {
                         "type": "boolean",
@@ -9182,8 +9389,14 @@
                     "public_reports",
                     "public_entity_metadata",
                     "public_scan_content",
+                    "collects_public_scan_content",
                     "public_query_entity",
                     "allow_illegal_content",
+                    "allow_url_uploads",
+                    "public_telephone_entities",
+                    "scan_content_types",
+                    "concerns",
+                    "default_concerns",
                     "search_enabled",
                     "public_search",
                     "search_types",

@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 import respx
 
-from pyfederation import IncidentType
+from pyfederation import IncidentType, OperatorPermissions
 
 from . import payloads
 from .utils import ACCESS_TOKEN, run
@@ -111,21 +111,61 @@ async def test_list_operator_blacklist(client: Any, api: respx.MockRouter) -> No
     assert records[0].type is IncidentType.SPAM
 
 
+async def test_update_operator_permissions(client: Any, api: respx.MockRouter) -> None:
+    route = api.patch(f"{OPERATOR}/permissions").respond(
+        json={"client": True, "management": True, "operator": False}
+    )
+
+    permissions = await run(
+        client.update_operator_permissions(payloads.OPERATOR_UUID, management=True)
+    )
+
+    assert json.loads(route.calls.last.request.content) == {"management": True}
+    assert permissions == OperatorPermissions(client=True, management=True, operator=False)
+
+
+async def test_update_operator_configuration(client: Any, api: respx.MockRouter) -> None:
+    route = api.patch(f"{OPERATOR}/configuration").respond(
+        json={"auto_assign_reports": False, "auto_assign_automated_reports": True, "is_bot": True}
+    )
+
+    configuration = await run(
+        client.update_operator_configuration(
+            payloads.OPERATOR_UUID, auto_assign_automated_reports=True, is_bot=True
+        )
+    )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "auto_assign_automated_reports": True,
+        "is_bot": True,
+    }
+    assert configuration.is_bot
+
+
 @pytest.mark.parametrize(
-    ("method", "path"),
+    ("method", "value", "path", "body"),
     [
-        ("set_operator_permissions", "operator-permissions"),
-        ("set_client_permissions", "client-permissions"),
-        ("set_management_permissions", "management-permissions"),
-        ("set_auto_assign", "auto-assign"),
+        ("set_operator_permissions", False, "permissions", {"operator": False}),
+        ("set_client_permissions", False, "permissions", {"client": False}),
+        # Management permissions inherit client permissions
+        ("set_management_permissions", True, "permissions", {"client": True, "management": True}),
+        ("set_management_permissions", False, "permissions", {"management": False}),
+        (
+            "set_auto_assign",
+            True,
+            "configuration",
+            {"auto_assign_reports": True, "auto_assign_automated_reports": True},
+        ),
+        ("set_bot", True, "configuration", {"is_bot": True}),
     ],
 )
-async def test_operator_toggles(client: Any, api: respx.MockRouter, method: str, path: str) -> None:
-    route = api.patch(f"{OPERATOR}/{path}").respond(json={"success": True})
+async def test_operator_setters(
+    client: Any, api: respx.MockRouter, method: str, value: bool, path: str, body: dict[str, bool]
+) -> None:
+    route = api.patch(f"{OPERATOR}/{path}").respond(json=payloads.operator()[path])
 
-    await run(getattr(client, method)(payloads.OPERATOR_UUID, False))
-
-    assert json.loads(route.calls.last.request.content) == {"enabled": False}
+    assert await run(getattr(client, method)(payloads.OPERATOR_UUID, value)) is None
+    assert json.loads(route.calls.last.request.content) == body
 
 
 async def test_generate_access_token_updates_the_client(client: Any, api: respx.MockRouter) -> None:
@@ -180,6 +220,15 @@ async def test_list_operator_reports(
         (lambda client: client.create_operator(""), "Operator name cannot be empty"),
         (lambda client: client.get_operator(""), "Operator UUID cannot be empty"),
         (lambda client: client.set_auto_assign("", True), "Operator UUID cannot be empty"),
+        (
+            lambda client: client.update_operator_permissions(payloads.OPERATOR_UUID),
+            "At least one permission group must be given",
+        ),
+        (
+            lambda client: client.update_operator_configuration(payloads.OPERATOR_UUID),
+            "At least one setting must be given",
+        ),
+        (lambda client: client.set_bot("", True), "Operator UUID cannot be empty"),
         (
             lambda client: client.update_operator_name(payloads.OPERATOR_UUID, ""),
             "Operator name cannot be empty",
