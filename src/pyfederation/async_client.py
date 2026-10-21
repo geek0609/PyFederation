@@ -31,7 +31,9 @@ from .records import (
     EntityRecord,
     EvidenceRecord,
     FileAttachmentRecord,
+    OperatorConfiguration,
     OperatorCreated,
+    OperatorPermissions,
     OperatorRecord,
     ReportRecord,
     ReportSubmission,
@@ -419,55 +421,109 @@ class AsyncFederationClient:
         )
         return parse_list(BlacklistRecord, data)
 
+    async def update_operator_permissions(
+        self,
+        operator_uuid: str,
+        client: bool | None = None,
+        management: bool | None = None,
+        operator: bool | None = None,
+    ) -> OperatorPermissions:
+        """Grants or revokes permission groups of an operator, returning its updated permissions.
+
+        Groups given as None are left unchanged. Management permissions inherit client permissions,
+        so the server rejects revoking client permissions from an operator that keeps management
+        permissions with HTTP 409.
+        """
+        require(operator_uuid, "Operator UUID")
+        payload = compact(client=client, management=management, operator=operator)
+        if not payload:
+            raise ValueError("At least one permission group must be given")
+
+        data = await self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/permissions",
+            f"Failed to update the permissions of operator {operator_uuid}",
+            json=payload,
+        )
+        return OperatorPermissions.model_validate(data)
+
+    async def update_operator_configuration(
+        self,
+        operator_uuid: str,
+        auto_assign_reports: bool | None = None,
+        auto_assign_automated_reports: bool | None = None,
+        is_bot: bool | None = None,
+    ) -> OperatorConfiguration:
+        """Changes the settings of an operator, returning its updated configuration.
+
+        Settings given as None are left unchanged. An operator may change its own configuration,
+        changing that of another operator requires operator permissions.
+
+        Args:
+            operator_uuid: The operator to change.
+            auto_assign_reports: Whether reports that are not automated are automatically
+                assigned to the operator.
+            auto_assign_automated_reports: Whether automated reports are automatically assigned
+                to the operator.
+            is_bot: Whether the operator is a bot, whose evidence and reports are automated and
+                whose evidence is created confidential.
+        """
+        require(operator_uuid, "Operator UUID")
+        payload = compact(
+            auto_assign_reports=auto_assign_reports,
+            auto_assign_automated_reports=auto_assign_automated_reports,
+            is_bot=is_bot,
+        )
+        if not payload:
+            raise ValueError("At least one setting must be given")
+
+        data = await self._request(
+            "PATCH",
+            f"operators/{path_segment(operator_uuid)}/configuration",
+            f"Failed to update the configuration of operator {operator_uuid}",
+            json=payload,
+        )
+        return OperatorConfiguration.model_validate(data)
+
     async def set_operator_permissions(
         self, operator_uuid: str, has_operator_permissions: bool
     ) -> None:
         """Grants or revokes the permission to manage other operators."""
-        require(operator_uuid, "Operator UUID")
-        action = "enable" if has_operator_permissions else "disable"
-        await self._request(
-            "PATCH",
-            f"operators/{path_segment(operator_uuid)}/operator-permissions",
-            f"Failed to {action} the operator's operator permissions",
-            json={"enabled": has_operator_permissions},
-        )
+        await self.update_operator_permissions(operator_uuid, operator=has_operator_permissions)
 
     async def set_client_permissions(
         self, operator_uuid: str, has_client_permissions: bool
     ) -> None:
-        """Grants or revokes the permission to submit data as a client."""
-        require(operator_uuid, "Operator UUID")
-        action = "enable" if has_client_permissions else "disable"
-        await self._request(
-            "PATCH",
-            f"operators/{path_segment(operator_uuid)}/client-permissions",
-            f"Failed to {action} the operator's client permissions",
-            json={"enabled": has_client_permissions},
-        )
+        """Grants or revokes the permission to submit data as a client.
+
+        Client permissions can't be revoked from an operator that holds management permissions.
+        """
+        await self.update_operator_permissions(operator_uuid, client=has_client_permissions)
 
     async def set_management_permissions(
         self, operator_uuid: str, has_management_permissions: bool
     ) -> None:
-        """Grants or revokes the permission to manage the database."""
-        require(operator_uuid, "Operator UUID")
-        action = "enable" if has_management_permissions else "disable"
-        await self._request(
-            "PATCH",
-            f"operators/{path_segment(operator_uuid)}/management-permissions",
-            f"Failed to {action} the operator's management permissions",
-            json={"enabled": has_management_permissions},
+        """Grants or revokes the permission to manage the database.
+
+        Granting management permissions also grants client permissions, which revoking them leaves
+        in place.
+        """
+        await self.update_operator_permissions(
+            operator_uuid,
+            client=True if has_management_permissions else None,
+            management=has_management_permissions,
         )
 
     async def set_auto_assign(self, operator_uuid: str, auto_assign: bool) -> None:
-        """Sets whether new reports are automatically assigned to an operator."""
-        require(operator_uuid, "Operator UUID")
-        action = "enable" if auto_assign else "disable"
-        await self._request(
-            "PATCH",
-            f"operators/{path_segment(operator_uuid)}/auto-assign",
-            f"Failed to {action} the operator's auto assign",
-            json={"enabled": auto_assign},
-        )
+        """Sets whether reports of every kind are automatically assigned to an operator.
+
+        Use update_operator_configuration() to opt in to ordinary or automated reports only.
+        """
+        await self.update_operator_configuration(operator_uuid, auto_assign, auto_assign)
+
+    async def set_bot(self, operator_uuid: str, is_bot: bool) -> None:
+        """Sets whether an operator is a bot, whose evidence and reports are automated."""
+        await self.update_operator_configuration(operator_uuid, is_bot=is_bot)
 
     async def generate_access_token(self, update: bool = True) -> str:
         """Generates a new access token for the authenticated operator, revoking the current one.

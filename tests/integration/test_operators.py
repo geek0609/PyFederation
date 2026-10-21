@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from pyfederation import FederationClient, FederationClientException
+from pyfederation import FederationClient, FederationClientException, OperatorPermissions
 
 from ..utils import run
 from .conftest import ENDPOINT, Records, unique
@@ -15,17 +15,15 @@ async def test_operator_lifecycle(client: Any, records: Records) -> None:
 
     name = unique("renamed")
     await run(client.update_operator_name(created.uuid, name))
-    await run(client.set_client_permissions(created.uuid, True))
     await run(client.set_management_permissions(created.uuid, True))
     await run(client.set_operator_permissions(created.uuid, True))
     await run(client.set_auto_assign(created.uuid, True))
     operator = await run(client.get_operator(created.uuid))
 
     assert operator.name == name
-    assert operator.client_permissions
-    assert operator.management_permissions
-    assert operator.operator_permissions
-    assert operator.auto_assign
+    assert operator.permissions == OperatorPermissions(client=True, management=True, operator=True)
+    assert operator.auto_assign_reports
+    assert operator.auto_assign_automated_reports
 
     await run(client.disable_operator(created.uuid))
     assert (await run(client.get_operator(created.uuid))).disabled

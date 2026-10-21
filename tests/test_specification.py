@@ -1,6 +1,6 @@
 """Checks the clients against the OpenAPI specification of FederationLib.
 
-The specification in fixtures/ is fetched from https://federation.nosial.net/specification.json.
+The specification in fixtures/ is the one FederationLib 2.0.0 serves at /specification.
 """
 
 import json
@@ -40,14 +40,12 @@ OPERATIONS = {
     ("GET", "/operators/{uuid}"): "get_operator",
     ("DELETE", "/operators/{uuid}"): "delete_operator",
     ("GET", "/operators/{uuid}/audit"): "list_operator_audit_logs",
-    ("PATCH", "/operators/{uuid}/auto-assign"): "set_auto_assign",
     ("GET", "/operators/{uuid}/blacklist"): "list_operator_blacklist",
-    ("PATCH", "/operators/{uuid}/client-permissions"): "set_client_permissions",
+    ("PATCH", "/operators/{uuid}/configuration"): "update_operator_configuration",
     ("PATCH", "/operators/{uuid}/disable"): "disable_operator",
     ("PATCH", "/operators/{uuid}/enable"): "enable_operator",
     ("GET", "/operators/{uuid}/evidence"): "list_operator_evidence",
-    ("PATCH", "/operators/{uuid}/management-permissions"): "set_management_permissions",
-    ("PATCH", "/operators/{uuid}/operator-permissions"): "set_operator_permissions",
+    ("PATCH", "/operators/{uuid}/permissions"): "update_operator_permissions",
     ("POST", "/operators/{uuid}/refresh"): "generate_operator_access_token",
     ("GET", "/operators/{uuid}/reports"): "list_operator_reports",
     ("GET", "/operators/{uuid}/reports/assigned"): "list_assigned_operator_reports",
