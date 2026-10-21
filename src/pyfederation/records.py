@@ -190,6 +190,12 @@ class FileAttachmentRecord(_Record):
     file_mime: str
     created: int
 
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _no_evidence(cls, value: Any) -> Any:
+        # An empty evidence UUID means the attachment is not associated with evidence
+        return value or None
+
 
 class OperatorCreated(_Record):
     """The UUID and access token of a newly created operator."""

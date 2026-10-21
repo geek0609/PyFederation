@@ -1490,6 +1490,36 @@ class FederationClient:
         file_name = PurePosixPath(httpx.URL(file_url).path).name or "downloaded_file"
         return self._upload_attachment(evidence_uuid, file_name, bytes(content))
 
+    def upload_file_attachment_by_url(self, evidence_uuid: str, file_url: str) -> UploadResult:
+        """Uploads a file as an attachment of an evidence record, which the server retrieves itself.
+
+        Unlike upload_file_attachment_from_url(), which downloads the file and uploads it, only the
+        URL is sent. The server must be able to reach it, and servers reject URLs that resolve to
+        non-public addresses unless configured otherwise. Only use it with a server that publishes
+        allow_url_uploads as true.
+
+        Args:
+            evidence_uuid: The evidence record to attach the file to.
+            file_url: The HTTP or HTTPS URL of the file.
+        """
+        require(evidence_uuid, "Evidence UUID")
+        if not file_url:
+            raise ValueError(f"Invalid URL provided: {file_url}")
+        try:
+            url = httpx.URL(file_url)
+        except httpx.InvalidURL as e:
+            raise ValueError(f"URL must be a valid HTTP or HTTPS URL: {file_url}") from e
+        if url.scheme not in ("http", "https") or not url.host:
+            raise ValueError(f"URL must be a valid HTTP or HTTPS URL: {file_url}")
+
+        data = self._request(
+            "POST",
+            "attachments",
+            f"Failed to upload attachment from URL {file_url}",
+            json={"evidence_uuid": evidence_uuid, "url": file_url},
+        )
+        return UploadResult.model_validate(data)
+
     def _upload_attachment(
         self, evidence_uuid: str, file_name: str, content: bytes | BinaryIO
     ) -> UploadResult:
