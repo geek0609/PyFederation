@@ -73,6 +73,7 @@ class AuditLog(_Record):
     blacklist: str | None = None
     evidence: str | None = None
     file_attachment: str | None = None
+    report: str | None = None
     type: AuditLogType
     message: str
     timestamp: int
@@ -317,7 +318,13 @@ class ScannedContent(_Record):
 
 
 class ServerInformation(_Record):
-    """The identity, public accessibility and record counts of a server."""
+    """The identity, capabilities, public accessibility and record counts of a server.
+
+    Unless public_telephone_entities is True, telephone entities are hidden from unauthenticated
+    requests that do not identify them by their address or SHA-256 hash.
+    collects_public_scan_content tells whether the server may store content that unauthenticated
+    requests submit for scanning, and is None when the server does not publish it.
+    """
 
     name: str
     api_version: str
@@ -327,13 +334,19 @@ class ServerInformation(_Record):
     public_entities: bool
     public_reports: bool
     public_entity_metadata: bool
+    public_telephone_entities: bool
     public_scan_content: bool
+    collects_public_scan_content: bool | None = None
     public_query_entity: bool
     search_enabled: bool
     public_search: bool
     search_types: list[OnErrorOmit[RecordType]]
     public_search_types: list[OnErrorOmit[RecordType]]
     allow_illegal_content: bool | None = None
+    allow_url_uploads: bool | None = None
+    scan_content_types: list[OnErrorOmit[ContentType]] = [ContentType.TEXT]
+    concerns: list[OnErrorOmit[IncidentType]] = []
+    default_concerns: list[OnErrorOmit[IncidentType]] = []
     public_audit_logs_visibility: list[AuditLogType] | None = None
     audit_log_records: int | None = None
     blacklist_records: int | None = None
@@ -343,6 +356,12 @@ class ServerInformation(_Record):
     operators: int | None = None
     reports: int | None = None
 
+    @field_validator("scan_content_types")
+    @classmethod
+    def _scan_text(cls, value: list[ContentType]) -> list[ContentType]:
+        # Content scanning always interprets text
+        return value if ContentType.TEXT in value else [ContentType.TEXT, *value]
+
     @property
     def illegal_content_allowed(self) -> bool:
         """Whether the server accepts reports with the ILLEGAL_CONTENT incident type.
@@ -351,6 +370,20 @@ class ServerInformation(_Record):
         allow_illegal_content do not publish it and accept every incident type.
         """
         return self.allow_illegal_content is not False
+
+    @property
+    def url_uploads_allowed(self) -> bool:
+        """Whether the server accepts attachments uploaded by URL.
+
+        Servers that do not publish allow_url_uploads are treated as not accepting them.
+        """
+        return self.allow_url_uploads is True
+
+    @property
+    def api_major_version(self) -> int:
+        """The major version of the OFD interface the server implements, -1 if it is unreadable."""
+        major = self.api_version.split(".", 1)[0].strip()
+        return int(major) if major.isdecimal() else -1
 
 
 class UploadResult(_Record):

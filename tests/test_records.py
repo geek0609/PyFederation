@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from pyfederation.enums import AuditLogType, IncidentType, NamedEntityType, RecordType
+from pyfederation.enums import AuditLogType, ContentType, IncidentType, NamedEntityType, RecordType
 from pyfederation.records import (
     AuditLog,
     BlacklistRecord,
@@ -185,8 +185,58 @@ def test_other_unrecognized_values_are_read_as_none() -> None:
 def test_unrecognized_values_are_left_out_of_lists() -> None:
     payload = payloads.server_information()
     payload["search_types"] = ["ENTITY", "NEW"]
+    payload["scan_content_types"] = ["EMAIL", "NEW"]
+    payload["concerns"] = ["SPAM", "NEW"]
 
-    assert ServerInformation.model_validate(payload).search_types == [RecordType.ENTITY]
+    information = ServerInformation.model_validate(payload)
+
+    assert information.search_types == [RecordType.ENTITY]
+    assert information.scan_content_types == [ContentType.TEXT, ContentType.EMAIL]
+    # An unrecognized incident type is read as OTHER
+    assert information.concerns == [IncidentType.SPAM, IncidentType.OTHER]
+
+
+def test_server_information_capabilities() -> None:
+    payload = payloads.server_information()
+    payload.update(
+        collects_public_scan_content=True,
+        allow_url_uploads=True,
+        scan_content_types=["TEXT", "EMAIL", "SMS", "WEB_PAGE", "HOSTNAME", "URL"],
+        concerns=["SPAM", "SCAM", "ADVERTISING", "TRACKING", "OTHER"],
+        default_concerns=["SPAM", "SCAM", "OTHER"],
+    )
+
+    information = ServerInformation.model_validate(payload)
+
+    assert information.api_major_version == 2
+    assert information.collects_public_scan_content
+    assert information.url_uploads_allowed
+    assert information.scan_content_types == list(ContentType)
+    assert information.default_concerns == [
+        IncidentType.SPAM,
+        IncidentType.SCAM,
+        IncidentType.OTHER,
+    ]
+
+
+def test_server_information_capabilities_that_are_not_published() -> None:
+    information = ServerInformation.model_validate(payloads.server_information())
+
+    assert information.collects_public_scan_content is None
+    assert not information.url_uploads_allowed
+    # Content scanning always interprets text
+    assert information.scan_content_types == [ContentType.TEXT]
+    assert information.concerns == information.default_concerns == []
+
+
+@pytest.mark.parametrize(
+    ("api_version", "major"), [("2.0", 2), ("2", 2), ("10.1", 10), ("v2", -1), ("", -1)]
+)
+def test_api_major_version(api_version: str, major: int) -> None:
+    payload = payloads.server_information()
+    payload["api_version"] = api_version
+
+    assert ServerInformation.model_validate(payload).api_major_version == major
 
 
 @pytest.mark.parametrize(("published", "allowed"), [(None, True), (True, True), (False, False)])

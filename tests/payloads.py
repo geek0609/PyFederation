@@ -129,13 +129,14 @@ def attachment(**overrides: Any) -> dict[str, Any]:
 def server_information() -> dict[str, Any]:
     return {
         "name": "Federation Server",
-        "api_version": "2026.1",
+        "api_version": "2.0",
         "public_audit_logs": True,
         "public_evidence": True,
         "public_blacklist": True,
         "public_entities": True,
         "public_reports": False,
         "public_entity_metadata": False,
+        "public_telephone_entities": False,
         "public_scan_content": False,
         "public_query_entity": True,
         "search_enabled": True,
