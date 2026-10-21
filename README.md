@@ -7,8 +7,9 @@ reference implementation, [FederationLib](https://github.com/nosial/FederationLi
 
 ## Features
 
-- Works with any OFD-compliant Federation server
-- Content scanning with entity resolution, classification, and risk assessment
+- Works with any Federation server implementing OFD 2.0
+- Content scanning with entity resolution, classification, risk assessment, content types, concerns,
+  and detections
 - Every method of the server API: operators, records, evidence, reports, blacklist records, file
   attachments, audit logs, search, and server information
 - Pagination, category filters, and sorting on every listing and search endpoint
@@ -129,6 +130,14 @@ print(f"Server {info.name}, API version {info.api_version}")
 print(f"Known entities: {info.known_entities}, reports: {info.reports}")
 ```
 
+A client should check the major version of the interface with `info.api_major_version`, this release
+implements OFD 2.0. The server information also publishes what content scanning supports
+(`scan_content_types`, `concerns` and `default_concerns`), whether URL uploads are accepted
+(`url_uploads_allowed`), whether telephone entities are public (`public_telephone_entities`) and
+whether content scanned anonymously may be stored (`collects_public_scan_content`). Values a newer
+server publishes that this client does not recognize are read as `None` or left out of lists, and an
+unrecognized incident type is read as `OTHER`.
+
 ### Asynchronous client
 
 `AsyncFederationClient` has the same methods as `FederationClient`, as coroutines, and is closed with
@@ -143,12 +152,42 @@ async with AsyncFederationClient("https://federation.example.com", "access-token
 
 ### Content scanning
 
-Content scanning accepts text, a `ContentInput`, or a list of inputs. Each input can carry text, an
-operator note, tag, confidentiality flag, and metadata; at least one input must contain text:
+Content scanning accepts text, a `ContentInput`, or a list of inputs. Each input can carry text, a
+content type and its context, an operator note, tag, confidentiality flag, and metadata; at least one
+input must contain text:
 
-| Method                                             | Return Type      | Description                      |
-|----------------------------------------------------|------------------|----------------------------------|
-| `scan_content(evidence, author, top_k, threshold)` | `ScannedContent` | Scans one or more content inputs |
+| Method                                                       | Return Type      | Description                      |
+|--------------------------------------------------------------|------------------|----------------------------------|
+| `scan_content(evidence, author, top_k, threshold, concerns)` | `ScannedContent` | Scans one or more content inputs |
+
+The content type (`TEXT`, `EMAIL`, `SMS`, `WEB_PAGE`, `HOSTNAME` or `URL`) determines the form of the
+text and the keys its context may contain, such as `subject` and `sender` for an `EMAIL`, `region`
+for an `SMS`, and the required `url` for a `WEB_PAGE`. The context is an assertion of the client, a
+detection that is not `verified` relies on it. Only the requested concerns (the server's
+`default_concerns` when none are given, which exclude `ADVERTISING` and `TRACKING`) affect the
+classification, risk score, suggested action, and `detections` of the result:
+
+```python
+from pyfederation import ContentInput, ContentType, IncidentType
+
+scan = client.scan_content(
+    [
+        ContentInput(
+            "Your account is locked, verify it now",
+            content_type=ContentType.EMAIL,
+            context={"subject": "Account locked", "sender": "security@example.com"},
+        ),
+        ContentInput("https://login.example.com/verify", content_type=ContentType.URL),
+    ],
+    concerns=[IncidentType.PHISHING, IncidentType.SPAM],
+)
+
+for detection in scan.detections:
+    print(
+        f"{detection.concern} in input {detection.content_index} by {detection.source} "
+        f"(verified: {detection.verified})"
+    )
+```
 
 Scanning content and inspecting the classification result:
 
@@ -166,8 +205,8 @@ print(
 
 ### Searching records
 
-The global search queries all record types with an optional type filter. The search query must be at
-least 2 characters:
+The global search queries all record types with an optional type filter. The search query must
+contain at least 2 non-whitespace characters:
 
 ```python
 from pyfederation import RecordType
@@ -196,10 +235,13 @@ operator, and each operator holds permissions that decide what it may do.
 | `update_operator_name(uuid, name)`                                               | Updates the display name of an operator                                              |
 | `delete_operator(uuid)`                                                          | Deletes an operator                                                                  |
 | `disable_operator(uuid)` / `enable_operator(uuid)`                               | Disables / enables an operator account                                               |
+| `update_operator_permissions(uuid, client, management, operator)`               | Grants or revokes permission groups, `None` leaves a group unchanged                 |
 | `set_operator_permissions(uuid, enabled)`                                        | Sets whether the operator has operator-level permissions                             |
 | `set_client_permissions(uuid, enabled)`                                          | Sets whether the operator has client-level permissions                               |
 | `set_management_permissions(uuid, enabled)`                                      | Sets whether the operator has management-level permissions                           |
-| `set_auto_assign(uuid, enabled)`                                                 | Sets whether reports are automatically assigned to the operator                      |
+| `update_operator_configuration(uuid, ...)`                                       | Changes the auto assignment and bot settings, `None` leaves a setting unchanged      |
+| `set_auto_assign(uuid, enabled)`                                                 | Sets whether reports of every kind are automatically assigned to the operator        |
+| `set_bot(uuid, is_bot)`                                                          | Sets whether the operator is a bot, whose evidence and reports are automated         |
 | `generate_access_token(update)`                                                  | Refreshes the current operator's token, optionally updating the client               |
 | `generate_operator_access_token(uuid)`                                           | Refreshes another operator's token                                                   |
 | `list_operator_audit_logs(uuid, ...)`                                            | Lists the audit log entries of an operator                                           |
@@ -219,6 +261,21 @@ token = created.access_token
 refreshed = client.generate_access_token(True)  # refresh and update this client
 ```
 
+An `OperatorRecord` carries its permission groups in `permissions` and its settings in
+`configuration`. Management permissions inherit client permissions, so revoking client permissions
+from an operator that keeps management permissions is rejected with HTTP 409. The configuration is
+only disclosed to the operator itself and to operators with operator permissions, anyone else
+receives `None`; an operator may change its own configuration:
+
+```python
+operator = client.get_operator(uuid)
+if operator.permissions.management and operator.configuration is not None:
+    print(f"Bot: {operator.is_bot}, auto assigned: {operator.auto_assigned}")
+
+# Opt in to automated reports only
+client.update_operator_configuration(uuid, False, True)
+```
+
 ### Entities
 
 Entities are the subjects tracked by the federation: users, domains, IP addresses, or any other
@@ -227,7 +284,7 @@ identifier present in scanned content.
 | Method                                                     | Description                                                       |
 |------------------------------------------------------------|-------------------------------------------------------------------|
 | `get_entity_record(identifier)`                            | Returns the record of an entity by identifier                     |
-| `query_entity(identifier)`                                 | Returns an entity's relationship group and active blacklist state |
+| `query_entity(identifier, concerns)`                       | Returns an entity's relationship group and active blacklist state |
 | `search_entities(query, page, limit, category, by, order)` | Searches entities by identifier                                   |
 | `list_entities(page, limit, category, by, order)`          | Lists entities                                                    |
 | `get_top_threats(limit)`                                   | Lists the highest-risk entities                                   |
@@ -244,7 +301,13 @@ identifier present in scanned content.
 | `list_entity_reports(identifier, ...)`                     | Lists the reports submitted against an entity                     |
 
 Entities are identified by their UUID, SHA-256 hash, or address, such as `example.com` or
-`john@example.com`.
+`john@example.com`. Entity identifiers are percent-encoded in request paths, so addresses such as
+`user+tag@example.com` can be passed as they are.
+
+A telephone number is the entity `<E.164 number>@e164.arpa`, whose local part is the international
+number without `+` or separators (`EntityRecord.is_telephone`). Unless the server publishes
+`public_telephone_entities`, unauthenticated requests only see a telephone entity they identify by
+its address or SHA-256 hash.
 
 ### Evidence
 
@@ -252,22 +315,25 @@ Evidence records are the supporting data attached to entities, either when submi
 manually by operators, and can hold text content, attachments, tags, notes, and confidentiality
 flags:
 
-| Method                                                                                         | Description                                  |
-|------------------------------------------------------------------------------------------------|----------------------------------------------|
-| `submit_evidence(identifier, text_content, note, tag, confidential, metadata, classification)` | Submits evidence with all optional fields    |
-| `list_evidence(page, limit, include_confidential, category, by, order)`                        | Lists evidence records                       |
-| `search_evidence(query, page, limit, category, by, order)`                                     | Searches evidence records                    |
-| `get_evidence_record(uuid)`                                                                    | Returns a single evidence record             |
-| `get_evidence_attachments(uuid)`                                                               | Lists the attachments of an evidence record  |
-| `update_evidence_confidentiality(uuid, confidential)`                                          | Updates the confidentiality flag of evidence |
-| `update_evidence_tag(uuid, tag)`                                                               | Updates the tag of evidence                  |
-| `classify_evidence(uuid, classification)`                                                      | Classifies evidence                          |
-| `add_evidence_to_report(evidence_uuid, report_uuid)`                                           | Attaches evidence to a report                |
-| `delete_evidence(uuid)`                                                                        | Deletes an evidence record                   |
+| Method                                                                                         | Description                                          |
+|------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| `submit_evidence(identifier, text_content, note, tag, confidential, metadata, classification)` | Submits evidence with all optional fields            |
+| `submit_evidence(..., content_type, context)`                                                  | Submits evidence with a content type and its context |
+| `list_evidence(page, limit, include_confidential, category, by, order)`                        | Lists evidence records                               |
+| `search_evidence(query, page, limit, category, by, order)`                                     | Searches evidence records                            |
+| `get_evidence_record(uuid)`                                                                    | Returns a single evidence record                     |
+| `get_evidence_attachments(uuid)`                                                               | Lists the attachments of an evidence record          |
+| `update_evidence_confidentiality(uuid, confidential)`                                          | Updates the confidentiality flag of evidence         |
+| `update_evidence_tag(uuid, tag)`                                                               | Updates the tag of evidence                          |
+| `classify_evidence(uuid, classification)`                                                      | Classifies evidence, replacing its classification    |
+| `add_evidence_to_report(evidence_uuid, report_uuid)`                                           | Attaches evidence to a report                        |
+| `delete_evidence(uuid)`                                                                        | Deletes an evidence record                           |
 
 Confidential evidence is hidden from unauthenticated clients by default, listing endpoints
 support an `include_confidential` parameter to include them when the operator has the appropriate
-permissions.
+permissions. Evidence the server creates itself or a bot operator submits is `automated` and created
+confidential, the `AUTOMATED` and `NOT_AUTOMATED` categories select it, and evidence about a
+telephone entity is always confidential.
 
 ### Reports
 
@@ -292,18 +358,19 @@ groups one or more pieces of evidence, and can be classified, assigned to operat
 ### Blacklist records
 
 Blacklist records are the server's mitigation mechanism. An operator blacklists an entity with an
-incident type and, optionally, the report backing the decision:
+incident type and, optionally, the report backing the decision, which may concern another entity,
+such as the domain a reported account advertised:
 
-| Method                                                                     | Description                                                            |
-|----------------------------------------------------------------------------|------------------------------------------------------------------------|
-| `blacklist_entity(identifier, incident_type, report_uuid)`                 | Blacklists an entity permanently                                       |
-| `blacklist_entity(identifier, incident_type, report_uuid, expires)`        | Blacklists an entity with an expiration timestamp (Unix epoch seconds) |
-| `list_blacklist_records(page, limit, include_lifted, category, by, order)` | Lists blacklist entries                                                |
-| `search_blacklist(query, page, limit, category, by, order)`                | Searches blacklist entries                                             |
-| `get_blacklist_record(uuid)`                                               | Returns a single blacklist record                                      |
-| `lift_blacklist_record(uuid)`                                              | Lifts the blacklist entry of an entity                                 |
-| `extend_blacklist_record(uuid, seconds)`                                   | Extends the blacklist of an entity by the given seconds                |
-| `delete_blacklist_record(uuid)`                                            | Deletes a blacklist record                                             |
+| Method                                                                            | Description                                                            |
+|-----------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| `blacklist_entity(identifier, incident_type, report_uuid)`                        | Blacklists an entity permanently                                       |
+| `blacklist_entity(identifier, incident_type, report_uuid, expires)`               | Blacklists an entity with an expiration timestamp (Unix epoch seconds) |
+| `list_blacklist_records(page, limit, include_lifted, category, by, order, types)` | Lists blacklist entries, optionally of the given incident types only   |
+| `search_blacklist(query, page, limit, category, by, order, types)`                | Searches blacklist entries, optionally of the given incident types     |
+| `get_blacklist_record(uuid)`                                                      | Returns a single blacklist record                                      |
+| `lift_blacklist_record(uuid)`                                                     | Lifts the blacklist entry of an entity                                 |
+| `extend_blacklist_record(uuid, seconds)`                                          | Extends the blacklist of an entity by the given seconds                |
+| `delete_blacklist_record(uuid)`                                                   | Deletes a blacklist record                                             |
 
 ### File attachments
 
@@ -315,6 +382,7 @@ Evidence records support file attachments with uploads from disk or URL, and not
 | `upload_file_attachment(evidence_uuid, local_file_path, file_name)`       | Uploads a local file attachment with a custom name |
 | `upload_file_attachment_from_url(evidence_uuid, file_url)`                | Uploads an attachment from a reachable URL         |
 | `upload_file_attachment_from_url(evidence_uuid, file_url, max_file_size)` | Uploads an attachment from a URL with a size limit |
+| `upload_file_attachment_by_url(evidence_uuid, file_url)`                  | Server retrieves the attachment from a URL         |
 | `upload_note_attachment(evidence_uuid, file_name, content)`               | Uploads a plain-text note attachment               |
 | `download_attachment(attachment_uuid, directory_path)`                    | Downloads an attachment into the given directory   |
 | `get_attachment_info(uuid)`                                               | Returns the metadata of an attachment              |
@@ -325,11 +393,16 @@ Evidence records support file attachments with uploads from disk or URL, and not
 URL uploads default to a maximum file size of 50 MB, matching the FederationLib client default, the
 limit can be raised per request.
 
+`upload_file_attachment_from_url` downloads the file and uploads it, while
+`upload_file_attachment_by_url` sends only the URL and the server retrieves the file itself. The URL
+must then be reachable by the server, and servers reject URLs that resolve to private, loopback or
+other non-public addresses unless configured otherwise.
+
 ### Pagination and sorting
 
 Every listing and search endpoint accepts the same pagination and sorting arguments: `page` (1-based)
 and `limit` (minimum 1), followed by an optional category filter, `by` (the field to sort by,
-case-insensitive), and `order` (`"ASC"` or `"DESC"`), for example:
+case-insensitive, sent uppercase as OFD 2.0 defines), and `order` (`"ASC"` or `"DESC"`), for example:
 
 ```python
 # Defaults: page 1, limit 100
@@ -359,8 +432,9 @@ except FederationClientException as e:
 ```
 
 Failures without a response, such as connection errors, have a status code of 0. Invalid arguments,
-such as an empty UUID, a page below 1, a search query shorter than 2 characters, or an access token
-that is empty or contains whitespace, are rejected by the client immediately with a `ValueError`.
+such as an empty UUID, a page below 1, a search query with fewer than 2 non-whitespace characters,
+or an access token that is empty or contains whitespace, are rejected by the client immediately with
+a `ValueError`.
 
 ## Testing
 
