@@ -29,7 +29,7 @@ def page_params(
 ) -> dict[str, Any]:
     """Returns the query parameters of a paginated request.
 
-    The sort field is lowercased and the sort order uppercased, matching what the server expects.
+    The sort field and the sort order are uppercased, as OFD 2.0 defines them.
     """
     if page < 1:
         raise ValueError("Page must be greater than 0")
@@ -40,15 +40,15 @@ def page_params(
         page=page,
         limit=limit,
         **filters,
-        by=by.lower() if by is not None else None,
+        by=by.upper() if by is not None else None,
         order=order.upper() if order is not None else None,
     )
 
 
 def search_params(query: str, page: int, limit: int, **params: Any) -> dict[str, Any]:
     """Returns the query parameters of a paginated search."""
-    if len(query) < 2:
-        raise ValueError("Search query must be at least 2 characters")
+    if sum(not character.isspace() for character in query) < 2:
+        raise ValueError("Search query must contain at least 2 non-whitespace characters")
 
     return {"q": query, **page_params(page, limit, **params)}
 
@@ -63,15 +63,8 @@ def path_segment(value: str) -> str:
 
 
 def entity_path(entity_identifier: str) -> str:
-    """Returns the path of an entity.
-
-    Servers implementing OFD 1.x take the identifier unencoded, so an identifier that would not
-    stay one path segment is rejected.
-    """
-    if entity_identifier in (".", "..") or any(c in entity_identifier for c in "/\\?#%"):
-        raise ValueError(f"Entity identifier cannot be used in a path: {entity_identifier}")
-
-    return f"entities/{entity_identifier}"
+    """Returns the path of an entity, percent-encoding its identifier as one path segment."""
+    return f"entities/{path_segment(entity_identifier)}"
 
 
 def parse_list(model: type[M], data: list[Any]) -> list[M]:

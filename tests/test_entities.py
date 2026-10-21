@@ -24,6 +24,14 @@ async def test_get_entity_record(client: Any, api: respx.MockRouter) -> None:
     assert entity.metadata == {"platform": "telegram"}
 
 
+async def test_entity_identifiers_are_percent_encoded(client: Any, api: respx.MockRouter) -> None:
+    route = api.get(path__startswith="/entities/").respond(json=payloads.entity())
+
+    await run(client.get_entity_record("user+tag%@example.com"))
+
+    assert route.calls.last.request.url.raw_path == b"/entities/user%2Btag%25%40example.com"
+
+
 async def test_delete_entity(client: Any, api: respx.MockRouter) -> None:
     route = api.delete(ENTITY).respond(json={"success": True})
 
@@ -68,7 +76,7 @@ async def test_list_entities(client: Any, api: respx.MockRouter) -> None:
         "page": "3",
         "limit": "20",
         "category": "WHITELISTED",
-        "by": "reputation",
+        "by": "REPUTATION",
         "order": "ASC",
     }
     assert entities[0].host == "example.com"
@@ -122,7 +130,7 @@ async def test_list_entity_evidence_records(client: Any, api: respx.MockRouter) 
         "page": "1",
         "limit": "100",
         "include_confidential": "false",
-        "by": "created",
+        "by": "CREATED",
         "order": "DESC",
     }
 
@@ -207,10 +215,7 @@ async def test_clear_entity_relationship(client: Any, api: respx.MockRouter) -> 
     ("call", "message"),
     [
         (lambda client: client.get_entity_record(""), "Entity identifier cannot be empty"),
-        (
-            lambda client: client.get_entity_record("a/b@example.com"),
-            "Entity identifier cannot be used in a path",
-        ),
+        (lambda client: client.get_entity_record(".."), "Identifier cannot be"),
         (lambda client: client.push_entity(""), "Host cannot be empty"),
         (lambda client: client.push_entity("example.com", ""), "Entity ID cannot be empty"),
         (

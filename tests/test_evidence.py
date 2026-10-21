@@ -50,7 +50,7 @@ async def test_list_evidence(client: Any, api: respx.MockRouter) -> None:
         "limit": "25",
         "include_confidential": "true",
         "category": "CLASSIFIED",
-        "by": "tag",
+        "by": "TAG",
         "order": "ASC",
     }
 

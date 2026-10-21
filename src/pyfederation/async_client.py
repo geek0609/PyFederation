@@ -214,7 +214,7 @@ class AsyncFederationClient:
         """Searches across all record types.
 
         Args:
-            query: The search query, at least 2 characters long.
+            query: The search query, with at least 2 non-whitespace characters.
             types: The record types to restrict the search to, or None for all types.
             page: The page number.
             limit: The number of results per record type.

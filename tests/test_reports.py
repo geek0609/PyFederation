@@ -79,7 +79,7 @@ async def test_list_reports(client: Any, api: respx.MockRouter) -> None:
         "page": "1",
         "limit": "100",
         "category": "UNASSIGNED",
-        "by": "created",
+        "by": "CREATED",
         "order": "DESC",
     }
 
@@ -92,7 +92,7 @@ async def test_list_opened_reports(client: Any, api: respx.MockRouter) -> None:
     assert dict(route.calls.last.request.url.params) == {
         "page": "1",
         "limit": "100",
-        "by": "incident_type",
+        "by": "INCIDENT_TYPE",
     }
 
 

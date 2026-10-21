@@ -87,7 +87,7 @@ async def test_list_blacklist_records(client: Any, api: respx.MockRouter) -> Non
         "limit": "50",
         "include_lifted": "true",
         "category": "ACTIVE",
-        "by": "expires",
+        "by": "EXPIRES",
         "order": "ASC",
     }
     assert records[0].report == payloads.REPORT_UUID
