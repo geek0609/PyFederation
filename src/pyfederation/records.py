@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, ClassVar, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -109,11 +109,19 @@ class EntityRecord(_Record):
     created: int
     updated: int
 
+    TELEPHONE_ENTITY_HOST: ClassVar[str] = "e164.arpa"
+    """The host of telephone entities."""
+
     @field_validator("metadata", mode="before")
     @classmethod
     def _decode_metadata(cls, value: Any) -> Any:
         # FederationLib serializes entity metadata as a JSON encoded string
         return json.loads(value) if isinstance(value, str) else value
+
+    @property
+    def is_telephone(self) -> bool:
+        """Whether the entity is a telephone number, <E.164 number>@e164.arpa."""
+        return self.host.lower() == self.TELEPHONE_ENTITY_HOST and self.id is not None
 
 
 class EntityQueryResult(_Record):

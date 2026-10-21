@@ -65,6 +65,8 @@ class IncidentType(StrEnum):
     ILLEGAL_CONTENT = "ILLEGAL_CONTENT"
     MALWARE = "MALWARE"
     PHISHING = "PHISHING"
+    ADVERTISING = "ADVERTISING"
+    TRACKING = "TRACKING"
     OTHER = "OTHER"
 
     @classmethod
@@ -80,6 +82,7 @@ class NamedEntityType(StrEnum):
     EMAIL = "email"
     IPV4 = "ipv4"
     IPV6 = "ipv6"
+    TELEPHONE = "telephone"
 
 
 class RecordType(StrEnum):
