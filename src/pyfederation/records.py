@@ -157,13 +157,20 @@ class EntityQueryResult(_Record):
 
 
 class EvidenceRecord(_Record):
-    """Information collected about an entity."""
+    """Information collected about an entity.
+
+    Evidence is automated when the server created it or a bot operator submitted it, and automated
+    evidence is created confidential.
+    """
 
     uuid: str
     entity: str
     operator: str
     confidential: bool
+    automated: bool
     text_content: str | None = None
+    content_type: _Lenient[ContentType] = ContentType.TEXT
+    context: dict[str, str] | None = None
     note: str | None = None
     tag: str | None = None
     report: str | None = None
