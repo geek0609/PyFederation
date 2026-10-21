@@ -2,9 +2,20 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from enum import StrEnum
+from typing import Annotated, Any, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    OnErrorOmit,
+    ValidationError,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    WrapValidator,
+    field_validator,
+)
 
 from .enums import (
     AuditLogType,
@@ -15,6 +26,20 @@ from .enums import (
     RecordType,
     SuggestedAction,
 )
+
+_E = TypeVar("_E", bound=StrEnum)
+
+
+def _unrecognized_as_none(value: Any, handler: ValidatorFunctionWrapHandler) -> Any:
+    try:
+        return handler(value)
+    except ValidationError:
+        return None
+
+
+# A later minor version of OFD may add values to a set of values. Values this client does not
+# recognize are read as None, or left out of lists with OnErrorOmit.
+_Lenient = Annotated[_E | None, WrapValidator(_unrecognized_as_none)]
 
 
 class _Record(BaseModel):
@@ -63,7 +88,7 @@ class BlacklistRecord(_Record):
 class ContentClassification(_Record):
     """The classification of scanned content."""
 
-    classification_flag: ClassificationFlag
+    classification_flag: _Lenient[ClassificationFlag]
     confidence: float
     detected_language: str | None = None
 
@@ -80,7 +105,7 @@ class EntityRecord(_Record):
     reputation: int
     reputation_last_updated: int | None = None
     relationship_entity: str | None = None
-    relationship_type: EntityRelationshipType | None = None
+    relationship_type: _Lenient[EntityRelationshipType] = None
     created: int
     updated: int
 
@@ -97,7 +122,7 @@ class EntityQueryResult(_Record):
     entity_record: EntityRecord
     related_entities: list[EntityRecord]
     active_blacklists: list[BlacklistRecord]
-    suggested_action: SuggestedAction | None = None
+    suggested_action: _Lenient[SuggestedAction] = None
     suggested_lift_timestamp: int | None = None
 
 
@@ -113,7 +138,7 @@ class EvidenceRecord(_Record):
     tag: str | None = None
     report: str | None = None
     metadata: dict[str, Any] | None = None
-    classification_flag: ClassificationFlag | None = None
+    classification_flag: _Lenient[ClassificationFlag] = None
     created: int
     updated: int
 
@@ -177,7 +202,7 @@ class ResolvedEntityPosition(_Record):
 
     offset: int
     length: int
-    type: NamedEntityType
+    type: _Lenient[NamedEntityType]
 
 
 class ResolvedEntity(_Record):
@@ -195,7 +220,7 @@ class ScannedContent(_Record):
     resolved_entities: list[ResolvedEntity]
     author_entity: ResolvedEntity | None = None
     classification: ContentClassification | None = None
-    suggested_action: SuggestedAction | None = None
+    suggested_action: _Lenient[SuggestedAction] = None
     suggested_lift_timestamp: int | None = None
     scan_results: dict[str, float]
     risk_score: float
@@ -216,8 +241,8 @@ class ServerInformation(_Record):
     public_query_entity: bool
     search_enabled: bool
     public_search: bool
-    search_types: list[RecordType]
-    public_search_types: list[RecordType]
+    search_types: list[OnErrorOmit[RecordType]]
+    public_search_types: list[OnErrorOmit[RecordType]]
     allow_illegal_content: bool | None = None
     public_audit_logs_visibility: list[AuditLogType] | None = None
     audit_log_records: int | None = None

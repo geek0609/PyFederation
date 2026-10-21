@@ -123,6 +123,18 @@ async def test_search(client: Any, api: respx.MockRouter) -> None:
     assert isinstance(results[1].record, EvidenceRecord)
 
 
+async def test_search_leaves_out_unrecognized_record_types(
+    client: Any, api: respx.MockRouter
+) -> None:
+    api.get("/search").respond(
+        json=[{"type": "NEW", "record": {}}, {"type": "ENTITY", "record": payloads.entity()}]
+    )
+
+    results = await run(client.search("example"))
+
+    assert [result.type for result in results] == [RecordType.ENTITY]
+
+
 async def test_search_all_types(client: Any, api: respx.MockRouter) -> None:
     route = api.get("/search").respond(json=[])
 

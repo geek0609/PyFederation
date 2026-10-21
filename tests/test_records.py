@@ -2,13 +2,16 @@ from typing import Any
 
 import pytest
 
-from pyfederation.enums import NamedEntityType, RecordType
+from pyfederation.enums import AuditLogType, IncidentType, NamedEntityType, RecordType
 from pyfederation.records import (
     AuditLog,
+    BlacklistRecord,
+    EntityQueryResult,
     EntityRecord,
     EvidenceRecord,
     OperatorCreated,
     OperatorRecord,
+    ResolvedEntityPosition,
     ScannedContent,
     SearchResult,
     ServerInformation,
@@ -76,6 +79,35 @@ def test_scanned_content_resolves_nested_entities() -> None:
     assert resolved.entity_position.type is NamedEntityType.DOMAIN
     assert resolved.parent_entity is not None
     assert resolved.parent_entity.entity.host == "example.com"
+
+
+def test_unrecognized_incident_and_audit_log_types_are_read_as_other() -> None:
+    assert BlacklistRecord.model_validate(payloads.blacklist(type="NEW")).type is IncidentType.OTHER
+    assert AuditLog.model_validate(payloads.audit_log(type="NEW")).type is AuditLogType.OTHER
+
+
+def test_other_unrecognized_values_are_read_as_none() -> None:
+    entity = EntityRecord.model_validate(payloads.entity(relationship_type="NEW"))
+    position = ResolvedEntityPosition.model_validate({"offset": 0, "length": 4, "type": "new"})
+    query = EntityQueryResult.model_validate(
+        {
+            "entity_record": payloads.entity(),
+            "related_entities": [],
+            "active_blacklists": [],
+            "suggested_action": "NEW",
+        }
+    )
+
+    assert entity.relationship_type is None
+    assert position.type is None
+    assert query.suggested_action is None
+
+
+def test_unrecognized_values_are_left_out_of_lists() -> None:
+    payload = payloads.server_information()
+    payload["search_types"] = ["ENTITY", "NEW"]
+
+    assert ServerInformation.model_validate(payload).search_types == [RecordType.ENTITY]
 
 
 @pytest.mark.parametrize(("published", "allowed"), [(None, True), (True, True), (False, False)])
