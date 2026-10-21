@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,20 @@ async def test_upload_file_attachment_from_url(client: Any, api: respx.MockRoute
     assert uploaded_file(upload.calls.last.request) == ("photo.jpg", b"JPEG")
 
 
+async def test_upload_file_attachment_by_url(client: Any, api: respx.MockRouter) -> None:
+    route = api.post("/attachments").respond(201, json=UPLOAD_RESULT)
+
+    result = await run(
+        client.upload_file_attachment_by_url(payloads.EVIDENCE_UUID, "https://cdn.example/a.png")
+    )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "evidence_uuid": payloads.EVIDENCE_UUID,
+        "url": "https://cdn.example/a.png",
+    }
+    assert result.uuid == payloads.ATTACHMENT_UUID
+
+
 async def test_upload_file_attachment_from_url_limits_the_size(
     client: Any, api: respx.MockRouter
 ) -> None:
@@ -236,6 +251,22 @@ async def test_download_attachment_error(
                 payloads.EVIDENCE_UUID, "https://cdn.example/a.png", 0
             ),
             "Maximum file size must be greater than 0",
+        ),
+        (
+            lambda client: client.upload_file_attachment_by_url(payloads.EVIDENCE_UUID, ""),
+            "Invalid URL provided",
+        ),
+        (
+            lambda client: client.upload_file_attachment_by_url(
+                payloads.EVIDENCE_UUID, "file:///etc/passwd"
+            ),
+            "URL must be a valid HTTP or HTTPS URL",
+        ),
+        (
+            lambda client: client.upload_file_attachment_by_url(
+                payloads.EVIDENCE_UUID, "not-a-valid-url"
+            ),
+            "URL must be a valid HTTP or HTTPS URL",
         ),
         (
             lambda client: client.download_attachment(payloads.ATTACHMENT_UUID, ""),

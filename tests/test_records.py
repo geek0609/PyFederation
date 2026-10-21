@@ -9,6 +9,7 @@ from pyfederation.records import (
     EntityQueryResult,
     EntityRecord,
     EvidenceRecord,
+    FileAttachmentRecord,
     OperatorCreated,
     OperatorRecord,
     ResolvedEntityPosition,
@@ -92,6 +93,12 @@ def test_scanned_content_resolves_nested_entities() -> None:
     assert resolved.entity_position.type is NamedEntityType.DOMAIN
     assert resolved.parent_entity is not None
     assert resolved.parent_entity.entity.host == "example.com"
+
+
+@pytest.mark.parametrize(("evidence", "expected"), [("", None), (None, None), ("e", "e")])
+def test_attachment_without_evidence(evidence: str | None, expected: str | None) -> None:
+    attachment = FileAttachmentRecord.model_validate(payloads.attachment(evidence=evidence))
+    assert attachment.evidence == expected
 
 
 def test_scanned_content_detections() -> None:
