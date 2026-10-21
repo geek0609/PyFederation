@@ -215,7 +215,9 @@ class AsyncFederationClient:
         data = await self._request(
             "GET", "search", f"Failed to search, query: {query}", params=params
         )
-        return parse_list(SearchResult, data)
+        # Records of a type added by a later minor version of OFD are left out
+        record_types = set(RecordType)
+        return parse_list(SearchResult, [item for item in data if item["type"] in record_types])
 
     async def scan_content(
         self,

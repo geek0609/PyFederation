@@ -1,8 +1,12 @@
 from enum import StrEnum
+from typing import Self
 
 
 class AuditLogType(StrEnum):
-    """Every type of event that can appear in the Federation audit log."""
+    """Every type of event that can appear in the Federation audit log.
+
+    A type this client does not recognize is read as OTHER.
+    """
 
     OPERATOR_CREATED = "OPERATOR_CREATED"
     OPERATOR_DELETED = "OPERATOR_DELETED"
@@ -28,6 +32,10 @@ class AuditLogType(StrEnum):
     BLACKLIST_EXTENDED = "BLACKLIST_EXTENDED"
     OTHER = "OTHER"
 
+    @classmethod
+    def _missing_(cls, value: object) -> Self:
+        return cls.OTHER
+
 
 class ClassificationFlag(StrEnum):
     """Classification assigned to scanned content or evidence."""
@@ -46,7 +54,10 @@ class EntityRelationshipType(StrEnum):
 
 
 class IncidentType(StrEnum):
-    """Categories of security incidents attached to blacklist records and reports."""
+    """Categories of security incidents attached to blacklist records and reports.
+
+    An incident type this client does not recognize is read as OTHER.
+    """
 
     SPAM = "SPAM"
     SCAM = "SCAM"
@@ -55,6 +66,10 @@ class IncidentType(StrEnum):
     MALWARE = "MALWARE"
     PHISHING = "PHISHING"
     OTHER = "OTHER"
+
+    @classmethod
+    def _missing_(cls, value: object) -> Self:
+        return cls.OTHER
 
 
 class NamedEntityType(StrEnum):
