@@ -22,7 +22,13 @@ from ._utils import (
     require,
     search_params,
 )
-from .enums import ClassificationFlag, EntityRelationshipType, IncidentType, RecordType
+from .enums import (
+    ClassificationFlag,
+    ContentType,
+    EntityRelationshipType,
+    IncidentType,
+    RecordType,
+)
 from .exceptions import FederationClientException
 from .records import (
     AuditLog,
@@ -935,18 +941,25 @@ class FederationClient:
         confidential: bool = False,
         metadata: dict[str, Any] | None = None,
         classification: ClassificationFlag | None = None,
+        content_type: ContentType = ContentType.TEXT,
+        context: dict[str, str] | None = None,
     ) -> str:
         """Submits evidence about an entity, returning the UUID of the evidence record.
 
+        Evidence submitted by a bot operator is automated and created confidential, and evidence
+        about a telephone entity is always confidential.
+
         Args:
             entity_identifier: The entity the evidence is about.
-            text_content: The observed text content.
+            text_content: The observed content, in the form its content type defines.
             note: A note by the operator.
             tag: A tag to categorize the evidence with.
             confidential: Whether the evidence is hidden from the public.
             metadata: Arbitrary metadata to associate with the evidence.
-            classification: An immutable classification of the evidence, which requires management
+            classification: A classification of the evidence, which requires management
                 permissions and trains the server's classifier with the text content.
+            content_type: The type of the content.
+            context: The context of the content, whose keys are defined per content type.
         """
         require(entity_identifier, "Entity identifier")
         payload = compact(
@@ -957,6 +970,9 @@ class FederationClient:
             confidential=confidential,
             metadata=metadata,
             classification=classification,
+            # TEXT is the default content type, which is not sent
+            content_type=content_type if content_type is not ContentType.TEXT else None,
+            context=context,
         )
         evidence_uuid: str = self._request(
             "POST",
@@ -989,7 +1005,10 @@ class FederationClient:
         )
 
     def classify_evidence(self, evidence_uuid: str, classification: ClassificationFlag) -> None:
-        """Classifies an evidence record, training the server's classifier with its content."""
+        """Classifies an evidence record, training the server's classifier with its content.
+
+        A classification replaces the previous classification of the evidence.
+        """
         require(evidence_uuid, "Evidence UUID")
         self._request(
             "PATCH",

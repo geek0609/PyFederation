@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from pyfederation import ClassificationFlag
+from pyfederation import ClassificationFlag, ContentType
 
 from ..utils import run
 from .conftest import Records, unique
@@ -37,6 +37,21 @@ async def test_update_evidence(client: Any, records: Records) -> None:
     assert evidence.tag == "phishing"
     assert evidence.confidential
     assert evidence.classification_flag is ClassificationFlag.MALICIOUS
+
+
+async def test_typed_evidence(client: Any, records: Records) -> None:
+    entity_uuid = await records.entity()
+    context = {"subject": "Your invoice", "sender": "billing@example.com"}
+
+    email_uuid = await records.evidence(
+        entity_uuid, content_type=ContentType.EMAIL, context=context
+    )
+    email = await run(client.get_evidence_record(email_uuid))
+    text = await run(client.get_evidence_record(await records.evidence(entity_uuid)))
+
+    assert email.content_type is ContentType.EMAIL
+    assert email.context == context
+    assert text.content_type is ContentType.TEXT
 
 
 async def test_list_and_search_evidence(client: Any, records: Records) -> None:

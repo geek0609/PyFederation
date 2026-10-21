@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 import respx
 
-from pyfederation import ClassificationFlag
+from pyfederation import ClassificationFlag, ContentType
 
 from . import payloads
 from .utils import run
@@ -93,6 +93,27 @@ async def test_submit_evidence(client: Any, api: respx.MockRouter) -> None:
         "classification": "MALICIOUS",
     }
     assert evidence_uuid == payloads.EVIDENCE_UUID
+
+
+async def test_submit_typed_evidence(client: Any, api: respx.MockRouter) -> None:
+    route = api.post("/evidence").respond(201, json=payloads.EVIDENCE_UUID)
+
+    await run(
+        client.submit_evidence(
+            "john@example.com",
+            "https://example.com/login",
+            content_type=ContentType.WEB_PAGE,
+            context={"url": "https://example.com/login", "title": "Login"},
+        )
+    )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "entity_identifier": "john@example.com",
+        "text_content": "https://example.com/login",
+        "confidential": False,
+        "content_type": "WEB_PAGE",
+        "context": {"url": "https://example.com/login", "title": "Login"},
+    }
 
 
 async def test_submit_evidence_without_content(client: Any, api: respx.MockRouter) -> None:
