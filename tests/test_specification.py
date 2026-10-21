@@ -161,6 +161,8 @@ def record_property(record: str, name: str) -> Any:
         (IncidentType, record_property("Detection", "concern")),
         (ContentType, record_property("ContentInput", "content_type")),
         (NamedEntityType, record_property("ResolvedEntityPosition", "type")),
+        (ContentType, record_property("ServerInformation", "scan_content_types")["items"]),
+        (IncidentType, record_property("ServerInformation", "concerns")["items"]),
     ],
 )
 def test_enums_cover_the_specification(enum: type[StrEnum], schema: Any) -> None:

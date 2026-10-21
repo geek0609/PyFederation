@@ -22,7 +22,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 async def test_get_server_information(client: Any) -> None:
     information = await run(client.get_server_information())
 
-    assert information.api_version
+    assert information.api_major_version == 2
     assert information.operators >= 1
 
 
