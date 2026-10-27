@@ -60,6 +60,8 @@ This release follows version `2.0` of the OFD Specification and [JFederation](ht
    `blacklist_entity()` rejects an empty report UUID
  - `FileAttachmentRecord.evidence` is `None` instead of an empty string when the server reports no associated
    evidence record
+ - `download_attachment()` never replaces an existing file or symbolic link, raising `ValueError` instead as
+   FederationLib's client does, and removes the partial file of a download that fails
 
 
 ## [1.0.0] - 2026-10-13

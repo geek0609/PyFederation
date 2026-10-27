@@ -204,6 +204,47 @@ async def test_download_attachment_falls_back_to_its_uuid(
     assert file_path == tmp_path / payloads.ATTACHMENT_UUID
 
 
+async def test_download_attachment_never_replaces_a_file(
+    client: Any, api: respx.MockRouter, tmp_path: Path
+) -> None:
+    api.get(ATTACHMENT).respond(
+        content=b"new", headers={"Content-Disposition": 'attachment; filename="report.txt"'}
+    )
+    existing = tmp_path / "report.txt"
+    existing.write_bytes(b"old")
+
+    with pytest.raises(ValueError, match="already exists"):
+        await run(client.download_attachment(payloads.ATTACHMENT_UUID, tmp_path))
+
+    assert existing.read_bytes() == b"old"
+
+
+class _FailingStream(httpx.SyncByteStream, httpx.AsyncByteStream):
+    """A response body that breaks off after its first chunk."""
+
+    def __iter__(self) -> Any:
+        yield b"part"
+        raise httpx.ReadError("Connection lost")
+
+    async def __aiter__(self) -> Any:
+        yield b"part"
+        raise httpx.ReadError("Connection lost")
+
+
+async def test_download_attachment_removes_a_partial_file(
+    client: Any, api: respx.MockRouter, tmp_path: Path
+) -> None:
+    api.get(ATTACHMENT).respond(
+        stream=_FailingStream(),
+        headers={"Content-Disposition": 'attachment; filename="report.txt"'},
+    )
+
+    with pytest.raises(FederationClientException, match="Connection lost"):
+        await run(client.download_attachment(payloads.ATTACHMENT_UUID, tmp_path))
+
+    assert list(tmp_path.iterdir()) == []
+
+
 async def test_download_attachment_requires_a_directory(client: Any, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Directory does not exist"):
         await run(client.download_attachment(payloads.ATTACHMENT_UUID, tmp_path / "missing"))

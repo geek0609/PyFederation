@@ -1393,7 +1393,11 @@ class AsyncFederationClient:
     ) -> Path:
         """Downloads a file attachment into a directory, returning the path of the file.
 
-        The file is named after the attachment, replacing any existing file of the same name.
+        The file is named after the attachment. An existing file or symbolic link of the same name
+        is never replaced, and a download that fails leaves no partial file behind.
+
+        Raises:
+            ValueError: If the directory is not usable or the file already exists.
         """
         require(attachment_uuid, "Attachment UUID")
         require(os.fspath(directory_path), "Directory path")
@@ -1410,9 +1414,17 @@ class AsyncFederationClient:
 
         try:
             file_path = directory / attachment_file_name(response, attachment_uuid)
-            with file_path.open("wb") as file:
-                async for chunk in response.aiter_bytes():
-                    file.write(chunk)
+            try:
+                file = file_path.open("xb")
+            except FileExistsError as e:
+                raise ValueError(f"File already exists: {file_path}") from e
+            try:
+                with file:
+                    async for chunk in response.aiter_bytes():
+                        file.write(chunk)
+            except BaseException:
+                file_path.unlink(missing_ok=True)
+                raise
         except httpx.HTTPError as e:
             raise FederationClientException(f"{error_message}: {e}") from e
         finally:
