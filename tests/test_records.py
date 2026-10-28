@@ -119,6 +119,7 @@ def test_scanned_content_detections() -> None:
                 {
                     "concern": "TRACKING",
                     "content_index": 0,
+                    "file_index": 2,
                     "entity": None,
                     "source": "filter_list",
                     "confidence": 0.5,
@@ -133,6 +134,9 @@ def test_scanned_content_detections() -> None:
         IncidentType.TRACKING,
     ]
     assert content.detections[0].entity == payloads.ENTITY_UUID
+    # Servers before OFD 2.1 do not relate detections to files
+    assert content.detections[0].file_index is None
+    assert content.detections[1].file_index == 2
     assert not content.detections[1].verified
 
 
@@ -204,11 +208,15 @@ def test_server_information_capabilities() -> None:
         scan_content_types=["TEXT", "EMAIL", "SMS", "WEB_PAGE", "HOSTNAME", "URL"],
         concerns=["SPAM", "SCAM", "ADVERTISING", "TRACKING", "OTHER"],
         default_concerns=["SPAM", "SCAM", "OTHER"],
+        max_scan_files=4,
+        max_scan_file_size=10_485_760,
     )
 
     information = ServerInformation.model_validate(payload)
 
     assert information.api_major_version == 2
+    assert information.max_scan_files == 4
+    assert information.max_scan_file_size == 10_485_760
     assert information.collects_public_scan_content
     assert information.url_uploads_allowed
     assert information.scan_content_types == list(ContentType)
@@ -227,6 +235,8 @@ def test_server_information_capabilities_that_are_not_published() -> None:
     # Content scanning always interprets text
     assert information.scan_content_types == [ContentType.TEXT]
     assert information.concerns == information.default_concerns == []
+    # Servers before OFD 2.1 do not publish the limits on scanned files
+    assert information.max_scan_files == information.max_scan_file_size == 0
 
 
 @pytest.mark.parametrize(

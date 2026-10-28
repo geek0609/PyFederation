@@ -105,11 +105,13 @@ class Detection(_Record):
     """A finding of the server about scanned content with respect to one of the concerns of a scan.
 
     A detection that is not verified relies on context or other assertions of the client, and
-    should be weighed as no stronger than them.
+    should be weighed as no stronger than them. file_index is the position of the file, among the
+    files of the content input, that the detection relates to, and None when it relates to none.
     """
 
     concern: IncidentType
     content_index: int
+    file_index: int | None = None
     entity: str | None = None
     source: str
     confidence: float | None = None
@@ -324,6 +326,9 @@ class ServerInformation(_Record):
     requests that do not identify them by their address or SHA-256 hash.
     collects_public_scan_content tells whether the server may store content that unauthenticated
     requests submit for scanning, and is None when the server does not publish it.
+    max_scan_files and max_scan_file_size are the maximum number of files a scan request may carry
+    and the maximum size of each in bytes, 0 when the server ignores the files of every request or
+    predates OFD 2.1.
     """
 
     name: str
@@ -345,6 +350,8 @@ class ServerInformation(_Record):
     allow_illegal_content: bool | None = None
     allow_url_uploads: bool | None = None
     scan_content_types: list[OnErrorOmit[ContentType]] = [ContentType.TEXT]
+    max_scan_files: int = 0
+    max_scan_file_size: int = 0
     concerns: list[OnErrorOmit[IncidentType]] = []
     default_concerns: list[OnErrorOmit[IncidentType]] = []
     public_audit_logs_visibility: list[AuditLogType] | None = None
