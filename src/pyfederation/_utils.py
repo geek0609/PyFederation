@@ -1,6 +1,9 @@
-from collections.abc import Sequence
+import os
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from email.message import Message
+from os import PathLike
+from pathlib import Path
 from typing import Any, TypeVar
 from urllib.parse import quote
 
@@ -93,6 +96,44 @@ def evidence_payload(
         raise ValueError("Evidence cannot be empty")
 
     return [content_payload(item) for item in evidence]
+
+
+def readable_file(local_file_path: str | PathLike[str]) -> Path:
+    """Returns the path of a local file, raising a ValueError unless it is a readable, non-empty
+    file."""
+    path = Path(local_file_path)
+    if not path.is_file():
+        raise ValueError(f"File does not exist: {local_file_path}")
+    if not os.access(path, os.R_OK):
+        raise ValueError(f"File is not readable: {local_file_path}")
+    if path.stat().st_size == 0:
+        raise ValueError(f"Invalid file or empty file: {local_file_path}")
+
+    return path
+
+
+def scan_files(
+    items: list[dict[str, Any]], files: Mapping[int, Sequence[str | PathLike[str]]]
+) -> dict[str, Path]:
+    """Names the files of each content input, keyed by the position of the input, in its files
+    member, and returns the files by the name of the multipart part that carries each."""
+    parts = {}
+    for index, paths in files.items():
+        if not 0 <= index < len(items):
+            raise ValueError(
+                f"The files are keyed by an evidence index that does not exist: {index}"
+            )
+        if isinstance(paths, str | PathLike) or not paths:
+            raise ValueError(
+                f"The files of the evidence at index {index} must be a non-empty sequence of paths"
+            )
+
+        for file_index, local_file_path in enumerate(paths):
+            part = f"file_{index}_{file_index}"
+            parts[part] = readable_file(local_file_path)
+            items[index].setdefault("files", []).append(part)
+
+    return parts
 
 
 def attachment_file_name(response: httpx.Response, default: str) -> str:

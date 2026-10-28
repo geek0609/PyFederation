@@ -1,9 +1,11 @@
 # Generated from async_client.py by scripts/unasync.py, do not edit.
 """Synchronous client for Federation servers."""
 
+import json
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from types import TracebackType
@@ -19,7 +21,9 @@ from ._utils import (
     page_params,
     parse_list,
     path_segment,
+    readable_file,
     require,
+    scan_files,
     search_params,
 )
 from .enums import (
@@ -231,6 +235,7 @@ class FederationClient:
         top_k: int | None = None,
         threshold: float | None = None,
         concerns: Sequence[IncidentType] | None = None,
+        files: Mapping[int, Sequence[str | PathLike[str]]] | None = None,
     ) -> ScannedContent:
         """Scans content for entities and blacklist records, and classifies it.
 
@@ -242,26 +247,48 @@ class FederationClient:
             concerns: The incident types to assess, among the concerns the server publishes, or
                 None for its default concerns. Only these affect the classification, risk score,
                 suggested action and detections of the result.
+            files: The local paths of the files of each content input, such as the images of a
+                message, keyed by the position of the input in the evidence, e.g.
+                {0: ["photo.jpg"]}. A content input with files may omit its text. Files are sent
+                in a multipart/form-data request, which a server that does not scan files accepts
+                and ignores, but which a server before OFD 2.1 may reject.
         """
         payload = evidence_payload(evidence)
         items = payload if isinstance(payload, list) else [payload]
-        if not any(item.get("text_content") for item in items):
-            raise ValueError("At least one evidence record must contain text content")
+        parts = scan_files(items, files or {})
+        if not parts and not any(item.get("text_content") for item in items):
+            raise ValueError("At least one evidence record must contain text content or a file")
         if concerns is not None and not concerns:
             raise ValueError("Concerns cannot be empty")
 
-        data = self._request(
-            "POST",
-            "scan",
-            "Failed to scan content",
-            json=compact(
-                evidence=payload,
-                author=author,
-                top_k=top_k,
-                threshold=threshold,
-                concerns=concerns,
-            ),
+        body = compact(
+            evidence=payload,
+            author=author,
+            top_k=top_k,
+            threshold=threshold,
+            concerns=concerns,
         )
+        if not parts:
+            data = self._request("POST", "scan", "Failed to scan content", json=body)
+            return ScannedContent.model_validate(data)
+
+        # A multipart request carries the evidence and the concerns as the JSON text of their
+        # values, and the other parameters as their text
+        fields = {
+            key: value if isinstance(value, str) else json.dumps(value)
+            for key, value in body.items()
+        }
+        with ExitStack() as stack:
+            data = self._request(
+                "POST",
+                "scan",
+                "Failed to scan content",
+                data=fields,
+                files={
+                    part: (path.name, stack.enter_context(path.open("rb")))
+                    for part, path in parts.items()
+                },
+            )
         return ScannedContent.model_validate(data)
 
     def list_audit_logs(
@@ -1435,14 +1462,7 @@ class FederationClient:
             file_name: The name to upload the file as, defaulting to its local name.
         """
         require(evidence_uuid, "Evidence UUID")
-        path = Path(local_file_path)
-        if not path.is_file():
-            raise ValueError(f"File does not exist: {local_file_path}")
-        if not os.access(path, os.R_OK):
-            raise ValueError(f"File is not readable: {local_file_path}")
-        if path.stat().st_size == 0:
-            raise ValueError(f"Invalid file or empty file: {local_file_path}")
-
+        path = readable_file(local_file_path)
         with path.open("rb") as file:
             return self._upload_attachment(evidence_uuid, file_name or path.name, file)
 

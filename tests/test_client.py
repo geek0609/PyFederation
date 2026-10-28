@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -19,7 +20,7 @@ from pyfederation import (
 from pyfederation.records import EntityRecord, EvidenceRecord
 
 from . import payloads
-from .utils import ACCESS_TOKEN, run
+from .utils import ACCESS_TOKEN, multipart_parts, run
 
 pytestmark = pytest.mark.anyio
 
@@ -229,6 +230,63 @@ async def test_scan_typed_content_with_concerns(client: Any, api: respx.MockRout
     }
 
 
+async def test_scan_content_with_files(client: Any, api: respx.MockRouter, tmp_path: Path) -> None:
+    route = api.post("/scan").respond(json=scan_response())
+    parcel = tmp_path / "parcel.jpg"
+    parcel.write_bytes(b"JPEG")
+    qr = tmp_path / "qr.png"
+    qr.write_bytes(b"PNG")
+
+    await run(
+        client.scan_content(
+            [ContentInput("Your parcel is on hold", content_type=ContentType.SMS), ContentInput()],
+            author="15550123456@e164.arpa",
+            top_k=3,
+            concerns=[IncidentType.PHISHING],
+            files={0: [parcel], 1: [str(qr)]},
+        )
+    )
+
+    parts = multipart_parts(route.calls.last.request)
+    assert parts.pop("file_0_0") == ("parcel.jpg", b"JPEG")
+    assert parts.pop("file_1_0") == ("qr.png", b"PNG")
+    # Every other parameter is carried in a part without a file
+    assert {name: file_name for name, (file_name, _) in parts.items()} == dict.fromkeys(
+        ["evidence", "author", "top_k", "concerns"]
+    )
+    assert json.loads(parts["evidence"][1]) == [
+        {
+            "text_content": "Your parcel is on hold",
+            "confidential": False,
+            "content_type": "SMS",
+            "files": ["file_0_0"],
+        },
+        {"confidential": False, "files": ["file_1_0"]},
+    ]
+    assert parts["author"][1] == b"15550123456@e164.arpa"
+    assert parts["top_k"][1] == b"3"
+    assert json.loads(parts["concerns"][1]) == ["PHISHING"]
+
+
+async def test_scan_content_with_files_of_one_input(
+    client: Any, api: respx.MockRouter, tmp_path: Path
+) -> None:
+    route = api.post("/scan").respond(json=scan_response())
+    photos = [tmp_path / "first.jpg", tmp_path / "second.jpg"]
+    for photo in photos:
+        photo.write_bytes(b"JPEG")
+
+    await run(client.scan_content("Look at these", files={0: photos}))
+
+    parts = multipart_parts(route.calls.last.request)
+    assert json.loads(parts["evidence"][1]) == {
+        "text_content": "Look at these",
+        "confidential": False,
+        "files": ["file_0_0", "file_0_1"],
+    }
+    assert parts["file_0_1"] == ("second.jpg", b"JPEG")
+
+
 async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> None:
     api.get("/info").respond(content=b"<html></html>", headers={"Content-Type": "text/html"})
 
@@ -258,7 +316,23 @@ async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> N
         ),
         (
             lambda client: client.scan_content([ContentInput(note="Seen in a group")]),
-            "At least one evidence record must contain text content",
+            "At least one evidence record must contain text content or a file",
+        ),
+        (
+            lambda client: client.scan_content("spam", files={1: ["photo.jpg"]}),
+            "The files are keyed by an evidence index that does not exist: 1",
+        ),
+        (
+            lambda client: client.scan_content("spam", files={0: []}),
+            "The files of the evidence at index 0 must be a non-empty sequence of paths",
+        ),
+        (
+            lambda client: client.scan_content("spam", files={0: "photo.jpg"}),
+            "The files of the evidence at index 0 must be a non-empty sequence of paths",
+        ),
+        (
+            lambda client: client.scan_content("spam", files={0: ["does-not-exist.jpg"]}),
+            "File does not exist: does-not-exist.jpg",
         ),
     ],
 )

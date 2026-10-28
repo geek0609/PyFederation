@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -77,6 +78,28 @@ async def test_scan_content(client: Any, records: Records) -> None:
     assert mentioned.entity.uuid == mentioned_uuid
     assert mentioned.entity_position.type is NamedEntityType.URL
     assert text[mentioned.entity_position.offset :].startswith("https://")
+
+
+async def test_scan_content_with_files(client: Any, records: Records, tmp_path: Path) -> None:
+    if (await run(client.get_server_information())).max_scan_files == 0:
+        pytest.skip("The server does not scan files")
+
+    host = f"{unique('scanned')}.com"
+    mentioned_uuid = records.track("delete_entity", await run(client.push_entity(host)))
+    photo = tmp_path / "photo.png"
+    photo.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    scanned = await run(
+        client.scan_content(
+            [ContentInput(f"Visit https://{host}/offer now"), ContentInput()],
+            concerns=[IncidentType.SPAM],
+            files={0: [photo], 1: [photo]},
+        )
+    )
+
+    [mentioned] = scanned.resolved_entities
+    assert mentioned.entity.uuid == mentioned_uuid
+    assert all(detection.concern is IncidentType.SPAM for detection in scanned.detections)
 
 
 async def test_scan_typed_content(client: Any) -> None:

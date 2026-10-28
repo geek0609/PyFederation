@@ -10,7 +10,7 @@ import respx
 from pyfederation import FederationClientException
 
 from . import payloads
-from .utils import run
+from .utils import multipart_parts, run
 
 pytestmark = pytest.mark.anyio
 
@@ -23,17 +23,11 @@ UPLOAD_RESULT = {
 
 def uploaded_file(request: httpx.Request) -> tuple[str, bytes]:
     """Returns the file name and content of the multipart upload, checking its evidence UUID."""
-    content_type, _, boundary = request.headers["Content-Type"].partition("; boundary=")
-    assert content_type == "multipart/form-data"
-
-    fields = {}
-    for part in request.content.split(b"--" + boundary.encode())[1:-1]:
-        headers, _, body = part.partition(b"\r\n\r\n")
-        fields[headers.split(b'name="')[1].split(b'"')[0].decode()] = (headers, body[:-2])
-
-    assert fields["evidence_uuid"][1] == payloads.EVIDENCE_UUID.encode()
-    file_headers, file_content = fields["file"]
-    return file_headers.split(b'filename="')[1].split(b'"')[0].decode(), file_content
+    parts = multipart_parts(request)
+    assert parts["evidence_uuid"] == (None, payloads.EVIDENCE_UUID.encode())
+    file_name, content = parts["file"]
+    assert file_name is not None
+    return file_name, content
 
 
 async def test_get_attachment_info(client: Any, api: respx.MockRouter) -> None:
