@@ -7,9 +7,9 @@ reference implementation, [FederationLib](https://github.com/nosial/FederationLi
 
 ## Features
 
-- Works with any Federation server implementing OFD 2.0
+- Works with any Federation server implementing OFD 2.x
 - Content scanning with entity resolution, classification, risk assessment, content types, concerns,
-  and detections
+  detections, and files such as the images of a message
 - Every method of the server API: operators, records, evidence, reports, blacklist records, file
   attachments, audit logs, search, and server information
 - Pagination, category filters, and sorting on every listing and search endpoint
@@ -131,8 +131,9 @@ print(f"Known entities: {info.known_entities}, reports: {info.reports}")
 ```
 
 A client should check the major version of the interface with `info.api_major_version`, this release
-implements OFD 2.0. The server information also publishes what content scanning supports
-(`scan_content_types`, `concerns` and `default_concerns`), whether URL uploads are accepted
+implements OFD 2.1. The server information also publishes what content scanning supports
+(`scan_content_types`, `concerns` and `default_concerns`, and the limits on scanned files,
+`max_scan_files` and `max_scan_file_size`), whether URL uploads are accepted
 (`url_uploads_allowed`), whether telephone entities are public (`public_telephone_entities`) and
 whether content scanned anonymously may be stored (`collects_public_scan_content`). Values a newer
 server publishes that this client does not recognize are read as `None` or left out of lists, and an
@@ -150,15 +151,23 @@ async with AsyncFederationClient("https://federation.example.com", "access-token
     info = await client.get_server_information()
 ```
 
+Routes the client has no method for, such as the routes a plugin of the server provides, are reached
+with `request()`, which sends the parameters as the query string of a `GET` or `DELETE` request and
+as a JSON body otherwise, and returns the decoded response:
+
+```python
+status = client.request("GET", "my-plugin/status", {"verbose": "true"})
+```
+
 ### Content scanning
 
 Content scanning accepts text, a `ContentInput`, or a list of inputs. Each input can carry text, a
-content type and its context, an operator note, tag, confidentiality flag, and metadata; at least one
-input must contain text:
+content type and its context, an operator note, tag, confidentiality flag, metadata, and files; at
+least one input must contain text or a file:
 
-| Method                                                       | Return Type      | Description                      |
-|--------------------------------------------------------------|------------------|----------------------------------|
-| `scan_content(evidence, author, top_k, threshold, concerns)` | `ScannedContent` | Scans one or more content inputs |
+| Method                                                              | Return Type      | Description                      |
+|---------------------------------------------------------------------|------------------|----------------------------------|
+| `scan_content(evidence, author, top_k, threshold, concerns, files)` | `ScannedContent` | Scans one or more content inputs |
 
 The content type (`TEXT`, `EMAIL`, `SMS`, `WEB_PAGE`, `HOSTNAME` or `URL`) determines the form of the
 text and the keys its context may contain, such as `subject` and `sender` for an `EMAIL`, `region`
@@ -188,6 +197,25 @@ for detection in scan.detections:
         f"(verified: {detection.verified})"
     )
 ```
+
+The files of each input, such as the images of a message, are given as local paths keyed by the
+position of the input, and an input with files may omit its text. The server determines the media
+type of each file from its content, interprets the ones it supports, and ignores the others, as it
+ignores every file when `max_scan_files` is 0; servers before OFD 2.1 may reject files. A detection
+that relates to a file carries its position among the files of the input in `file_index`:
+
+```python
+scan = client.scan_content(
+    [
+        ContentInput("Your parcel is on hold", content_type=ContentType.SMS),
+        ContentInput(),  # an image sent on its own
+    ],
+    files={0: ["parcel.jpg"], 1: ["qr.png"]},
+)
+```
+
+Files the server records as evidence are kept as attachments of that evidence, and many files carry
+metadata, such as the location a photograph was taken at, that the server does not need.
 
 Scanning content and inspecting the classification result:
 
