@@ -208,6 +208,37 @@ class AsyncFederationClient:
         )
         return spec
 
+    async def request(
+        self, method: str, path: str, parameters: dict[str, Any] | None = None
+    ) -> Any:
+        """Sends a request to a route this client has no method for, such as a route a plugin of
+        the server provides, authenticated with the access token of the client.
+
+        Args:
+            method: The HTTP method: GET, POST, PUT, PATCH or DELETE.
+            path: The path of the route relative to the endpoint, such as "my-plugin/status".
+            parameters: The parameters, sent as the query string of a GET or DELETE request and as
+                a JSON body otherwise.
+
+        Returns:
+            The decoded JSON response, or None if the response is empty.
+        """
+        method = method.upper()
+        if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+            raise ValueError("Method must be one of GET, POST, PUT, PATCH or DELETE")
+        path = path.strip("/")
+        if not path or "://" in path or any(part in (".", "..") for part in path.split("/")):
+            raise ValueError(f"Path must be a non-empty path relative to the endpoint: {path}")
+
+        query = method in ("GET", "DELETE")
+        return await self._request(
+            method,
+            path,
+            f"Failed to request {method} /{path}",
+            params=parameters if query else None,
+            json=None if query else parameters,
+        )
+
     async def search(
         self,
         query: str,

@@ -146,6 +146,25 @@ async def test_search_all_types(client: Any, api: respx.MockRouter) -> None:
     assert dict(route.calls.last.request.url.params) == {"q": "example", "page": "1", "limit": "10"}
 
 
+async def test_request_a_route_without_a_method(client: Any, api: respx.MockRouter) -> None:
+    route = api.get("/my-plugin/status").respond(json={"enabled": True})
+
+    response = await run(client.request("get", "/my-plugin/status/", {"verbose": "true"}))
+
+    assert response == {"enabled": True}
+    assert dict(route.calls.last.request.url.params) == {"verbose": "true"}
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {ACCESS_TOKEN}"
+
+
+async def test_request_sends_parameters_as_json(client: Any, api: respx.MockRouter) -> None:
+    route = api.post("/my-plugin/rules").respond(204)
+
+    response = await run(client.request("POST", "my-plugin/rules", {"rule": "block"}))
+
+    assert response is None
+    assert json.loads(route.calls.last.request.content) == {"rule": "block"}
+
+
 def scan_response() -> dict[str, Any]:
     return {
         "author_entity": None,
@@ -333,6 +352,16 @@ async def test_non_json_responses_raise(client: Any, api: respx.MockRouter) -> N
         (
             lambda client: client.scan_content("spam", files={0: ["does-not-exist.jpg"]}),
             "File does not exist: does-not-exist.jpg",
+        ),
+        (
+            lambda client: client.request("TRACE", "my-plugin"),
+            "Method must be one of GET, POST, PUT, PATCH or DELETE",
+        ),
+        (lambda client: client.request("GET", "/"), "Path must be a non-empty path"),
+        (lambda client: client.request("GET", "../info"), "Path must be a non-empty path"),
+        (
+            lambda client: client.request("GET", "https://example.com/info"),
+            "Path must be a non-empty path",
         ),
     ],
 )

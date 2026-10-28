@@ -33,6 +33,12 @@ async def test_get_specification(client: Any) -> None:
     assert "/scan" in specification["paths"]
 
 
+async def test_request(client: Any) -> None:
+    information = await run(client.request("GET", "info"))
+
+    assert information["api_version"].startswith("2.")
+
+
 async def test_invalid_access_token_is_rejected() -> None:
     with (
         FederationClient(ENDPOINT, "a" * 32) as client,
