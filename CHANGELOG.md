@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-28
+
+This release follows version `2.1` of the OFD Specification and the client of
+[FederationLib](https://github.com/nosial/FederationLib) 2.1.0, and remains compatible with servers implementing OFD
+2.0.
+
+### Added
+ - Scanned files: the `files` argument of `scan_content()` takes the local paths of the files of each content input,
+   such as the images of a message, keyed by the position of the input in the evidence, and sends them in a
+   `multipart/form-data` request. A content input with files may omit its text. A server that does not scan files
+   ignores them, servers before OFD 2.1 may reject them
+ - `ServerInformation` members `max_scan_files` and `max_scan_file_size`, `0` when the server ignores the files of
+   every request or does not publish them
+ - `Detection.file_index`, the position of the file a detection relates to among the files of its content input
+ - `request()` to send a request to a route the client has no method for, such as a route a plugin of the server
+   provides
+
 ## [2.0.0] - 2026-10-21
 
 This release follows version `2.0` of the OFD Specification and [JFederation](https://github.com/nosial/JFederation)
